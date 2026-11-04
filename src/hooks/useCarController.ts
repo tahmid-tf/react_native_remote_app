@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { SuperCarLink, CarCommand } from '@/services/transport';
+import { AppStorage } from '@/services/storage';
 
 export type DriveMode = 'mecanum' | 'classic';
 export type ActionType = 'burnout' | 'nitro';
@@ -102,6 +103,29 @@ export function useCarController() {
   const steeringRef = useRef<number>(0);
   const actionRef = useRef<ActionState | null>(null);
   const quickRef = useRef<QuickState | null>(null);
+
+  // Restore persisted settings from storage on startup
+  useEffect(() => {
+    let active = true;
+    AppStorage.getDriveMode().then((mode) => {
+      if (active && mode) {
+        setDriveMode(mode);
+      }
+    });
+    AppStorage.getServerUrl().then((savedUrl) => {
+      if (active && savedUrl) {
+        setServerUrl(savedUrl);
+      }
+    });
+    AppStorage.getIsLiveMode().then((savedLive) => {
+      if (active && typeof savedLive === 'boolean') {
+        setIsLiveMode(savedLive);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const triggerHaptic = useCallback((style: 'light' | 'medium' | 'heavy' = 'light') => {
     try {
@@ -252,6 +276,7 @@ export function useCarController() {
     stopAll();
     setDriveMode((prev) => {
       const next = prev === 'mecanum' ? 'classic' : 'mecanum';
+      AppStorage.setDriveMode(next);
       triggerHaptic('medium');
       announce(
         next === 'classic'
@@ -463,12 +488,22 @@ export function useCarController() {
     else driveStateText = 'DRIVING';
   }
 
+  const updateServerUrl = useCallback((url: string) => {
+    setServerUrl(url);
+    AppStorage.setServerUrl(url);
+  }, []);
+
+  const updateIsLiveMode = useCallback((live: boolean) => {
+    setIsLiveMode(live);
+    AppStorage.setIsLiveMode(live);
+  }, []);
+
   return {
     connected,
     isLiveMode,
-    setIsLiveMode,
+    setIsLiveMode: updateIsLiveMode,
     serverUrl,
-    setServerUrl,
+    setServerUrl: updateServerUrl,
     driveMode,
     toggleDriveMode,
     throttle,

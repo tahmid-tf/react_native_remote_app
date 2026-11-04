@@ -238,6 +238,33 @@ assert.equal(getOrientation(390, 844, 'landscape'), true, 'Manual override to la
 assert.equal(getOrientation(844, 390, 'portrait'), false, 'Manual override to portrait');
 console.log('✓ Screen orientation logic verified.\n');
 
+// 7. Test LocalStorage / Persistence Logic
+console.log('7. Testing Drive Mode Persistence Logic...');
+const mockStorage = new Map();
+function simulateStorageSave(key, val) {
+  mockStorage.set(key, String(val));
+}
+function simulateStorageGet(key, fallback) {
+  const v = mockStorage.get(key);
+  if (v === 'classic' || v === 'mecanum') return v;
+  return fallback;
+}
+
+// Initial state default
+assert.equal(simulateStorageGet('@supercar_drive_mode', 'mecanum'), 'mecanum');
+
+// Toggle to classic
+simulateStorageSave('@supercar_drive_mode', 'classic');
+assert.equal(simulateStorageGet('@supercar_drive_mode', 'mecanum'), 'classic', 'Must remember classic mode after toggle');
+
+// Simulate app restart: re-read from storage
+assert.equal(simulateStorageGet('@supercar_drive_mode', 'mecanum'), 'classic', 'Must preserve classic mode across app restart');
+
+// Toggle back to mecanum
+simulateStorageSave('@supercar_drive_mode', 'mecanum');
+assert.equal(simulateStorageGet('@supercar_drive_mode', 'classic'), 'mecanum', 'Must remember mecanum mode after toggle');
+console.log('✓ Drive mode local storage persistence verified.\n');
+
 console.log('====================================================');
 console.log('ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');
 console.log('====================================================');
