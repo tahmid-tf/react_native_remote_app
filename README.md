@@ -1,56 +1,70 @@
-# Welcome to your Expo app 👋
+# Super Car — React Native Controller App 🏎️💨
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Faithful, high-performance React Native & Expo port of the **Super Car Remote Control System** (ported from `ESP32CAR/ESP32CAR/demo`).
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Vertical & Horizontal Screen Layouts**:
+  - Automatically adapts when device is physically rotated.
+  - In-app **Portrait ⇄ Landscape** orientation toggle button in the top bar.
+  - **Horizontal mode (Landscape)**: Handheld console / transmitter layout with left thumb for Steering/Rotation + Actions, center for live Car visualization & Quick Moves presets, and right thumb for Movement/Throttle.
+  - **Vertical mode (Portrait)**: Full vertical dashboard with car visualizer, side-by-side joysticks, actions, and presets.
+- **Dual Gesture Joysticks with Multi-Touch**:
+  - **Left Stick (Rotation / Steering)**: Horizontal 1D slider (Left CCW / Right CW).
+  - **Right Stick (Movement / Throttle)**: 2D Planar joystick in Mecanum mode (Up Forward, Down Reverse, Left/Right Crab, smooth circular radial clamp); 1D in Classic mode.
+  - Supports multi-touch: steer, throttle, and trigger actions simultaneously.
+  - Auto-centers and releases to neutral on finger lift.
+- **Top-Down Animated Car Stage**:
+  - Vector SVG top view of the Super Car with aerodynamic body lines, windshield, cyan LED headlights, and red taillights.
+  - Real-time 4-wheel telemetry (M1 Left-Front, M2 Right-Front, M3 Left-Rear, M4 Right-Rear) showing active PWM values.
+  - Dynamic chassis tilt (`turn * 22deg`), lateral shift (`strafe`), and forward/reverse surge.
+  - Dual exhaust flame animations during Nitro boost and Burnout.
+- **Action Buttons**:
+  - **BURNOUT**: 100% PWM forward across all motors for 0.1s (100ms) with animated depleting progress bar.
+  - **NITRO**: 100% PWM boost across all motors for 1.0s (1000ms) with animated depleting progress bar.
+- **Quick Moves Presets (Hold-to-Move, 80% PWM)**:
+  - **Orbit**: Side + Rotation
+  - **Diagonal dash**: Forward + Right
+  - **Side shuffle**: Oscillating Left ⇄ Right
+  - **Figure eight**: Flowing turns
+  - **Corner pivot**: Rear-right pivot
+  - **Dance**: Sway + Rotate
+- **Mecanum ⇄ Classic Driving Modes**:
+  - Instant toggle between omnidirectional mecanum drive and classic differential drive.
+- **OTA Firmware Update**:
+  - Full modal with binary file validation (checks ESP32 application magic `0xabcd5432`, size > 288 bytes).
+  - Uploads to ESP32 `/api/firmware` with `X-Firmware-Token` and `X-Firmware-Size`.
+  - Realistic simulated upload in Interactive Demo mode.
+  - Pauses driving controls during update and polls for restart confirmation.
+- **ESP32 Telemetry & Settings**:
+  - Switch between Interactive Demo mode and Live ESP32 Wi-Fi mode.
+  - Configurable ESP32 IP/host (default `http://192.168.4.1`).
+  - ESP32 diagnostics viewer (poll reset reason, uptime, free heap, boot count, motor heartbeat).
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Running the App
 
 ```bash
-npm run reset-project
+# Start the development server
+npx expo start
+
+# Open on web
+npm run web
+
+# Open on Android
+npm run android
+
+# Open on iOS
+npm run ios
+
+# Run the test suite
+npm test
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Testing
 
-### Other setup steps
+Run the automated test suite to verify motor mixing, action timers, presets, firmware validation, transport serialization, and orientation logic:
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npm test
+```
+# react_native_remote_app
