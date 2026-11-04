@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Super Car Remote",
-    "slug": "super-car-remote",
+    "slug": "remote-app",
     "version": "1.0.0",
     "orientation": "landscape",
     "icon": "./assets/images/icon.png",
