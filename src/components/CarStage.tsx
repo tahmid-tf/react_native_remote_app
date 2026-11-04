@@ -3,9 +3,11 @@ import { StyleSheet, View, Text, Animated } from 'react-native';
 import Svg, {
   Defs,
   LinearGradient,
+  RadialGradient,
   Stop,
   Path,
   Rect,
+  Circle,
   G,
 } from 'react-native-svg';
 
@@ -26,7 +28,7 @@ export const CarStage: React.FC<CarStageProps> = ({
   steering,
   action,
   isLive,
-  compact = false,
+  compact = true,
 }) => {
   const isMoving = outputs.some((v) => v !== 0);
   const isBoosting = action?.name === 'nitro';
@@ -37,32 +39,53 @@ export const CarStage: React.FC<CarStageProps> = ({
   const xAnim = useRef(new Animated.Value(0)).current;
   const yAnim = useRef(new Animated.Value(0)).current;
   const flameAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
 
   const targetTurn = action ? 0 : steering / 80;
   const targetTravel = action ? 1 : throttle / 80;
-  const targetX = (strafe / 80) * 14;
-  const targetY = -targetTravel * 6;
-  const targetAngle = targetTurn * 22;
+  const targetX = (strafe / 80) * 12;
+  const targetY = -targetTravel * 5;
+  const targetAngle = targetTurn * 18;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(angleAnim, {
         toValue: targetAngle,
-        duration: 120,
+        duration: 100,
         useNativeDriver: true,
       }),
       Animated.timing(xAnim, {
         toValue: targetX,
-        duration: 120,
+        duration: 100,
         useNativeDriver: true,
       }),
       Animated.timing(yAnim, {
         toValue: targetY,
-        duration: 120,
+        duration: 100,
         useNativeDriver: true,
       }),
     ]).start();
   }, [targetAngle, targetX, targetY, angleAnim, xAnim, yAnim]);
+
+  // Underglow subtle pulse
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.85,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.4,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
 
   // Exhaust flame flicker animation during nitro or burnout
   useEffect(() => {
@@ -71,12 +94,12 @@ export const CarStage: React.FC<CarStageProps> = ({
         Animated.sequence([
           Animated.timing(flameAnim, {
             toValue: 0.6,
-            duration: 80,
+            duration: 70,
             useNativeDriver: true,
           }),
           Animated.timing(flameAnim, {
-            toValue: 1.2,
-            duration: 80,
+            toValue: 1.25,
+            duration: 70,
             useNativeDriver: true,
           }),
         ])
@@ -88,22 +111,37 @@ export const CarStage: React.FC<CarStageProps> = ({
     }
   }, [isBoosting, isBurning, flameAnim]);
 
-  const carWidth = compact ? 44 : 74;
-  const carHeight = compact ? 96 : 162;
+  const carWidth = compact ? 46 : 74;
+  const carHeight = compact ? 98 : 162;
+
+  // Derive underglow color
+  let underglowColor = 'rgba(110, 168, 255, 0.22)';
+  if (isBurning) underglowColor = 'rgba(255, 104, 75, 0.55)';
+  else if (isBoosting) underglowColor = 'rgba(80, 210, 255, 0.65)';
+  else if (isMoving) underglowColor = 'rgba(110, 168, 255, 0.4)';
 
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>
-      <Text style={[styles.topLabel, compact && styles.compactTopLabel]}>LIVE OUTPUT</Text>
-
+      {/* Telemetry Stage Platform */}
       <View style={[styles.stage, compact && styles.compactStage]}>
-        {/* Ambient aura glow */}
-        <View
+        {/* Dynamic Holographic Underglow Grid */}
+        <Animated.View
           style={[
-            styles.aura,
-            isBurning && styles.auraBurning,
-            isBoosting && styles.auraBoosting,
+            styles.underglowDisc,
+            {
+              backgroundColor: underglowColor,
+              opacity: pulseAnim,
+            },
           ]}
         />
+
+        {/* Radar concentric telemetry rings */}
+        <View style={styles.radarRings} pointerEvents="none">
+          <View style={styles.ringOuter} />
+          <View style={styles.ringInner} />
+          <View style={styles.axisCrossH} />
+          <View style={styles.axisCrossV} />
+        </View>
 
         {/* Wheels positioned around the chassis */}
         {/* FL (M1) */}
@@ -202,105 +240,134 @@ export const CarStage: React.FC<CarStageProps> = ({
             style={styles.carSvg}>
             <Defs>
               <LinearGradient id="bodyPaint" x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor="#34383e" />
-                <Stop offset="0.48" stopColor="#60656b" />
-                <Stop offset="0.54" stopColor="#52575d" />
-                <Stop offset="1" stopColor="#292c32" />
+                <Stop offset="0" stopColor="#25282e" />
+                <Stop offset="0.3" stopColor="#484e56" />
+                <Stop offset="0.5" stopColor="#5d636b" />
+                <Stop offset="0.7" stopColor="#484e56" />
+                <Stop offset="1" stopColor="#22252a" />
+              </LinearGradient>
+              <LinearGradient id="hoodAccent" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor="#ff7a5c" stopOpacity="0.8" />
+                <Stop offset="1" stopColor="#30343b" />
               </LinearGradient>
               <LinearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor="#243842" />
-                <Stop offset="1" stopColor="#10161c" />
+                <Stop offset="0" stopColor="#3b627d" />
+                <Stop offset="0.6" stopColor="#1e3140" />
+                <Stop offset="1" stopColor="#0d141a" />
+              </LinearGradient>
+              <LinearGradient id="cyanHeadlight" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor="#ffffff" />
+                <Stop offset="1" stopColor="#5cd8ff" />
               </LinearGradient>
             </Defs>
+
+            {/* Aerodynamic Shadow Plate */}
+            <Path
+              d="M20 14Q50 4 80 14L90 42 94 168Q92 198 80 206H20Q8 198 6 168L10 42Z"
+              fill="#08090b"
+              opacity="0.6"
+            />
 
             {/* Main Aerodynamic Outer Body */}
             <Path
               d="M24 10Q50 0 76 10L86 38 90 165Q88 195 76 202H24Q12 195 10 165L14 38Z"
               fill="url(#bodyPaint)"
-              stroke="#767c83"
-              strokeWidth="1.2"
+              stroke="#6b727a"
+              strokeWidth="1.3"
             />
+
+            {/* Front Racing Splitter & Canards */}
+            <Path
+              d="M20 12L12 28M80 12L88 28M24 10H76"
+              stroke="#ff684b"
+              strokeWidth="2"
+              fill="none"
+            />
+
             {/* Hood Trim */}
             <Path
-              d="M24 19Q50 11 76 19L79 48 21 48Z"
-              fill="#30343a"
-              stroke="#6b7076"
+              d="M26 20Q50 12 74 20L78 48 22 48Z"
+              fill="#2a2e34"
+              stroke="#545a62"
             />
+
+            {/* Hood Center Air Scoop */}
+            <Path
+              d="M44 24h12l2 14h-16z"
+              fill="#181a1f"
+              stroke="#ff7a5c"
+              strokeWidth="1"
+            />
+
             {/* Windshield */}
             <Path
               d="m22 53 56 0-6 33H28Z"
               fill="url(#glass)"
-              stroke="#829098"
+              stroke="#758896"
             />
-            {/* Cabin Roof */}
+
+            {/* Cockpit Roof */}
             <Path
               d="m29 91 42 0 4 56-50 0Z"
-              fill="#353a41"
-              stroke="#6a7076"
+              fill="#2e333a"
+              stroke="#555a62"
             />
+
             {/* Rear Window Glass */}
             <Path
               d="m25 153 50 0 4 23-58 0Z"
               fill="url(#glass)"
-              stroke="#6a757e"
+              stroke="#5e6a75"
             />
+
+            {/* Rear Aero Wing / Spoiler */}
+            <Path
+              d="M16 195Q50 190 84 195L86 202Q50 197 14 202Z"
+              fill="#1e2126"
+              stroke="#ff684b"
+              strokeWidth="1.5"
+            />
+
             {/* Aerodynamic Air Inlets & Seams */}
             <Path
               d="m17 59 5 84-7 17m68-101-5 84 7 17M28 185h44M32 29h36"
               fill="none"
-              stroke="#171b20"
+              stroke="#13161a"
               strokeWidth="2"
             />
-            {/* Cyan LED Headlights */}
+
+            {/* High-intensity Cyan LED Headlights */}
             <Path
-              d="m19 26 3-9 14-3m45 12-3-9-14-3"
+              d="m19 25 4-8 13-3m43 11-4-8-13-3"
               fill="none"
-              stroke="#d5f4fd"
-              strokeWidth="4"
+              stroke="url(#cyanHeadlight)"
+              strokeWidth="3.5"
             />
-            {/* Red LED Taillights */}
+
+            {/* Rear Tail Light Strip */}
             <Path
-              d="m17 187 3 9h17m46-9-3 9H63"
-              fill="none"
-              stroke="#ff5c56"
+              d="M24 192Q50 188 76 192"
+              stroke="#ff3823"
               strokeWidth="3"
+              fill="none"
             />
-            {/* Racing Center Decal */}
-            <Rect x="45" y="95" width="10" height="46" fill="#ff6549" opacity={0.8} />
           </Svg>
 
-          {/* Exhaust Flame nozzles */}
+          {/* Animated Exhaust Flames */}
           {(isBoosting || isBurning) && (
             <Animated.View
               style={[
-                styles.exhaustPipes,
+                styles.flameContainer,
                 {
-                  opacity: 1,
                   transform: [{ scaleY: flameAnim }],
                 },
               ]}>
-              <View
-                style={[
-                  styles.flame,
-                  isBurning && styles.flameOrange,
-                  isBoosting && styles.flameBlue,
-                ]}
-              />
-              <View
-                style={[
-                  styles.flame,
-                  isBurning && styles.flameOrange,
-                  isBoosting && styles.flameBlue,
-                ]}
-              />
+              <View style={[styles.flame, isBoosting && styles.flameNitro]} />
+              <View style={[styles.flame, isBoosting && styles.flameNitro]} />
             </Animated.View>
           )}
         </Animated.View>
       </View>
-
-      <Text style={[styles.bottomLabel, compact && styles.compactBottomLabel]}>
-        {isLive ? 'COMMANDED' : 'SIMULATED'}
-      </Text>
     </View>
   );
 };
@@ -309,167 +376,189 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
   compactContainer: {
-    paddingHorizontal: 0,
-    marginVertical: 0,
-  },
-  topLabel: {
-    fontSize: 8,
-    letterSpacing: 2,
-    color: '#737b87',
-    fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  compactTopLabel: {
-    fontSize: 6.5,
-    marginBottom: 2,
-  },
-  bottomLabel: {
-    fontSize: 7,
-    letterSpacing: 1.5,
-    color: '#5c6471',
-    fontWeight: '600',
-    marginTop: 6,
-    textTransform: 'uppercase',
-  },
-  compactBottomLabel: {
-    fontSize: 6,
-    marginTop: 2,
+    paddingVertical: 1,
   },
   stage: {
-    width: 160,
-    height: 220,
+    width: 140,
+    height: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
+  },
+  compactStage: {
+    width: 136,
+    height: 108,
+  },
+  underglowDisc: {
+    position: 'absolute',
+    width: 110,
+    height: 90,
+    borderRadius: 55,
+  },
+  radarRings: {
+    position: 'absolute',
+    width: 110,
+    height: 110,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactStage: {
-    width: 120,
-    height: 114,
+  ringOuter: {
+    position: 'absolute',
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+    borderStyle: 'dashed',
   },
-  aura: {
+  ringInner: {
+    position: 'absolute',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 1,
+    borderColor: 'rgba(110, 168, 255, 0.08)',
+  },
+  axisCrossH: {
     position: 'absolute',
     width: '100%',
-    height: '90%',
-    borderRadius: 80,
-    backgroundColor: 'rgba(141, 166, 208, 0.04)',
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-  auraBurning: {
-    backgroundColor: 'rgba(255, 104, 75, 0.18)',
+  axisCrossV: {
+    position: 'absolute',
+    width: 1,
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
   },
-  auraBoosting: {
-    backgroundColor: 'rgba(110, 168, 255, 0.22)',
+  wheelContainer: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  compactWheelFL: {
+    top: 6,
+    left: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  compactWheelFR: {
+    top: 6,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  compactWheelRL: {
+    bottom: 6,
+    left: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  compactWheelRR: {
+    bottom: 6,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  wheelFL: {
+    top: 10,
+    left: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  wheelFR: {
+    top: 10,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  wheelRL: {
+    bottom: 10,
+    left: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  wheelRR: {
+    bottom: 10,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  wheelGraphic: {
+    width: 11,
+    height: 22,
+    backgroundColor: '#1b1d22',
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#393f4a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wheelRunning: {
+    borderColor: '#6ea8ff',
+    backgroundColor: '#152233',
+    shadowColor: '#6ea8ff',
+    shadowOpacity: 0.6,
+    shadowRadius: 5,
+  },
+  tread: {
+    width: 4,
+    height: 10,
+    backgroundColor: '#353b47',
+    borderRadius: 1,
+  },
+  wheelValue: {
+    fontSize: 7.5,
+    fontFamily: 'monospace',
+    color: '#656d7a',
+    fontWeight: '700',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  wheelRunningText: {
+    color: '#8ec0ff',
   },
   carWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 5,
   },
   carSvg: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
   },
-  wheelContainer: {
+  flameContainer: {
     position: 'absolute',
+    bottom: -16,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    zIndex: 2,
-  },
-  wheelGraphic: {
-    width: 9,
-    height: 27,
-    borderRadius: 3,
-    backgroundColor: '#1d2026',
-    borderWidth: 1,
-    borderColor: '#434a55',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  wheelRunning: {
-    borderColor: '#ff684b',
-    backgroundColor: '#27201f',
-  },
-  tread: {
-    width: '100%',
-    height: '100%',
-    opacity: 0.5,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#353a42',
-  },
-  wheelValue: {
-    fontSize: 9,
-    fontFamily: 'monospace',
-    color: '#6d7683',
-    fontWeight: '600',
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  wheelRunningText: {
-    color: '#ff684b',
-  },
-  wheelFL: {
-    top: 44,
-    left: 8,
-  },
-  wheelFR: {
-    top: 44,
-    right: 8,
-  },
-  wheelRL: {
-    bottom: 42,
-    left: 8,
-  },
-  wheelRR: {
-    bottom: 42,
-    right: 8,
-  },
-  compactWheelFL: {
-    top: 14,
-    left: 2,
-  },
-  compactWheelFR: {
-    top: 14,
-    right: 2,
-  },
-  compactWheelRL: {
-    bottom: 14,
-    left: 2,
-  },
-  compactWheelRR: {
-    bottom: 14,
-    right: 2,
-  },
-  exhaustPipes: {
-    position: 'absolute',
-    bottom: -10,
-    flexDirection: 'row',
-    gap: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    gap: 12,
   },
   flame: {
-    width: 8,
-    height: 24,
-    borderRadius: 4,
-  },
-  flameOrange: {
-    backgroundColor: '#ff7733',
-    shadowColor: '#ff684b',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.9,
+    width: 6,
+    height: 20,
+    backgroundColor: '#ff5522',
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+    shadowColor: '#ff4400',
+    shadowOpacity: 0.8,
     shadowRadius: 8,
   },
-  flameBlue: {
-    backgroundColor: '#6ea8ff',
-    shadowColor: '#6ea8ff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.9,
-    shadowRadius: 8,
+  flameNitro: {
+    backgroundColor: '#00d0ff',
+    shadowColor: '#00aaff',
   },
 });

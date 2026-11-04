@@ -19,6 +19,7 @@ import { ActionDeck } from '@/components/ActionDeck';
 import { PresetDeck } from '@/components/PresetDeck';
 import { FirmwareModal } from '@/components/FirmwareModal';
 import { SettingsModal } from '@/components/SettingsModal';
+import { CockpitSplashOverlay } from '@/components/CockpitSplashOverlay';
 
 export default function RemoteScreen() {
   const {
@@ -252,6 +253,9 @@ export default function RemoteScreen() {
           connected={connected}
           onReconnect={toggleConnection}
         />
+
+        {/* Animated Boot / Splash Screen Overlay */}
+        <CockpitSplashOverlay />
       </View>
     </View>
   );
@@ -331,14 +335,18 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'space-around',
-    backgroundColor: '#16181c',
+    backgroundColor: '#121419',
     borderWidth: 1,
-    borderColor: '#2b2e35',
+    borderColor: '#262a34',
     borderRadius: 14,
     paddingVertical: 4,
     paddingHorizontal: 6,
-    marginHorizontal: 4,
+    marginHorizontal: 5,
     alignSelf: 'stretch',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
   },
   landscapeCenterHead: {
     width: '100%',
@@ -391,19 +399,22 @@ const styles = StyleSheet.create({
   },
   landscapeStopBtn: {
     height: 38,
-    borderRadius: 7,
-    backgroundColor: '#271b1d',
-    borderWidth: 1,
-    borderColor: '#542d32',
+    borderRadius: 8,
+    backgroundColor: '#271719',
+    borderWidth: 1.5,
+    borderColor: '#6b2d2f',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    shadowColor: '#ff4433',
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
   },
   landscapeStopBtnText: {
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: '#ff8a75',
+    fontSize: 8.5,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: '#ff927e',
   },
 });
