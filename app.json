@@ -3,7 +3,7 @@
     "name": "remote-app",
     "slug": "remote-app",
     "version": "1.0.0",
-    "orientation": "default",
+    "orientation": "landscape",
     "icon": "./assets/images/icon.png",
     "scheme": "remoteapp",
     "userInterfaceStyle": "automatic",
@@ -19,6 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.tahmid_tf.remoteapp",
+      "screenOrientation": "landscape",
       "usesCleartextTraffic": true,
       "permissions": [
         "INTERNET",

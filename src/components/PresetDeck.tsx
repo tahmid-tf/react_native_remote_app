@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  Pressable,
   ScrollView,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { QuickState } from '@/hooks/useCarController';
 
 interface PresetDeckProps {
@@ -24,6 +24,105 @@ interface PresetItem {
   desc: string;
   icon: (color: string, size?: number) => React.ReactNode;
 }
+
+const CompactPresetButton: React.FC<{
+  item: PresetItem;
+  isFiring: boolean;
+  isBlocked: boolean;
+  onStart: (name: string) => void;
+  onStop: () => void;
+}> = ({ item, isFiring, isBlocked, onStart, onStop }) => {
+  const strokeColor = isFiring ? '#6ea8ff' : '#909cad';
+
+  const gesture = useMemo(() => {
+    return Gesture.Pan()
+      .minDistance(0)
+      .minPointers(1)
+      .maxPointers(1)
+      .shouldCancelWhenOutside(false)
+      .runOnJS(true)
+      .enabled(!isBlocked)
+      .onBegin(() => {
+        onStart(item.id);
+      })
+      .onFinalize(() => {
+        onStop();
+      });
+  }, [isBlocked, item.id, onStart, onStop]);
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <View
+        // @ts-ignore
+        style={[
+          styles.compactRibbonBtn,
+          isFiring && styles.firingBtn,
+          isBlocked && styles.disabledBtn,
+          { touchAction: 'none', userSelect: 'none' },
+        ]}>
+        {item.icon(strokeColor, 14)}
+        <Text
+          style={[
+            styles.compactRibbonText,
+            isFiring && styles.firingText,
+          ]}>
+          {item.name}
+        </Text>
+      </View>
+    </GestureDetector>
+  );
+};
+
+const GridPresetButton: React.FC<{
+  item: PresetItem;
+  isFiring: boolean;
+  isBlocked: boolean;
+  onStart: (name: string) => void;
+  onStop: () => void;
+}> = ({ item, isFiring, isBlocked, onStart, onStop }) => {
+  const strokeColor = isFiring ? '#6ea8ff' : '#909cad';
+
+  const gesture = useMemo(() => {
+    return Gesture.Pan()
+      .minDistance(0)
+      .minPointers(1)
+      .maxPointers(1)
+      .shouldCancelWhenOutside(false)
+      .runOnJS(true)
+      .enabled(!isBlocked)
+      .onBegin(() => {
+        onStart(item.id);
+      })
+      .onFinalize(() => {
+        onStop();
+      });
+  }, [isBlocked, item.id, onStart, onStop]);
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <View
+        // @ts-ignore
+        style={[
+          styles.button,
+          isFiring && styles.firingBtn,
+          isBlocked && styles.disabledBtn,
+          { touchAction: 'none', userSelect: 'none' },
+        ]}>
+        <View style={styles.iconWrapper}>{item.icon(strokeColor, 18)}</View>
+        <View style={styles.textCol}>
+          <Text
+            style={[
+              styles.btnName,
+              isFiring && styles.firingText,
+            ]}>
+            {item.name}
+          </Text>
+          <Text style={styles.btnDesc}>{item.desc}</Text>
+        </View>
+      </View>
+    </GestureDetector>
+  );
+};
 
 const PRESETS: PresetItem[] = [
   {
@@ -111,32 +210,16 @@ export const PresetDeck: React.FC<PresetDeckProps> = ({
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.compactRibbonContent}>
-          {PRESETS.map((item) => {
-            const isFiring = currentQuick?.name === item.id;
-            const strokeColor = isFiring ? '#6ea8ff' : '#909cad';
-
-            return (
-              <Pressable
-                key={item.id}
-                disabled={isBlocked}
-                onPressIn={() => onStart(item.id)}
-                onPressOut={onStop}
-                style={[
-                  styles.compactRibbonBtn,
-                  isFiring && styles.firingBtn,
-                  isBlocked && styles.disabledBtn,
-                ]}>
-                {item.icon(strokeColor, 14)}
-                <Text
-                  style={[
-                    styles.compactRibbonText,
-                    isFiring && styles.firingText,
-                  ]}>
-                  {item.name}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {PRESETS.map((item) => (
+            <CompactPresetButton
+              key={item.id}
+              item={item}
+              isFiring={currentQuick?.name === item.id}
+              isBlocked={isBlocked}
+              onStart={onStart}
+              onStop={onStop}
+            />
+          ))}
         </ScrollView>
       </View>
     );
@@ -155,36 +238,16 @@ export const PresetDeck: React.FC<PresetDeckProps> = ({
 
       {/* Grid */}
       <View style={styles.grid}>
-        {PRESETS.map((item) => {
-          const isFiring = currentQuick?.name === item.id;
-          const strokeColor = isFiring ? '#6ea8ff' : '#909cad';
-
-          return (
-            <Pressable
-              key={item.id}
-              disabled={isBlocked}
-              onPressIn={() => onStart(item.id)}
-              onPressOut={onStop}
-              style={({ pressed }) => [
-                styles.button,
-                isFiring && styles.firingBtn,
-                (pressed || isFiring) && styles.pressedBtn,
-                isBlocked && styles.disabledBtn,
-              ]}>
-              <View style={styles.iconWrapper}>{item.icon(strokeColor, 18)}</View>
-              <View style={styles.textCol}>
-                <Text
-                  style={[
-                    styles.btnName,
-                    isFiring && styles.firingText,
-                  ]}>
-                  {item.name}
-                </Text>
-                <Text style={styles.btnDesc}>{item.desc}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+        {PRESETS.map((item) => (
+          <GridPresetButton
+            key={item.id}
+            item={item}
+            isFiring={currentQuick?.name === item.id}
+            isBlocked={isBlocked}
+            onStart={onStart}
+            onStop={onStop}
+          />
+        ))}
       </View>
     </View>
   );

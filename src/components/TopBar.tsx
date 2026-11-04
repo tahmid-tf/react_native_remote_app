@@ -7,8 +7,6 @@ interface TopBarProps {
   onToggleConnection: () => void;
   onOpenFirmware: () => void;
   onOpenSettings: () => void;
-  isLandscape: boolean;
-  onToggleOrientation: () => void;
   compact?: boolean;
 }
 
@@ -17,9 +15,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onToggleConnection,
   onOpenFirmware,
   onOpenSettings,
-  isLandscape,
-  onToggleOrientation,
-  compact = false,
+  compact = true,
 }) => {
   return (
     <View style={[styles.topbar, compact && styles.compactTopbar]}>
@@ -58,24 +54,6 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Tools */}
       <View style={[styles.tools, compact && styles.compactTools]}>
-        {/* Orientation Toggle Button */}
-        <TouchableOpacity
-          activeOpacity={0.75}
-          onPress={onToggleOrientation}
-          style={[styles.toolBtn, compact && styles.compactToolBtn]}
-          accessibilityLabel="Toggle vertical / horizontal orientation">
-          <Svg width={compact ? 12 : 14} height={compact ? 12 : 14} viewBox="0 0 24 24" fill="none" stroke="#bdc4cf" strokeWidth={2}>
-            {isLandscape ? (
-              // Portrait phone icon
-              <Path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM12 18h.01" />
-            ) : (
-              // Landscape phone icon / rotate icon
-              <Path d="M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6zM18 12h.01" />
-            )}
-          </Svg>
-          <Text style={[styles.toolBtnText, compact && styles.compactToolBtnText]}>{isLandscape ? 'Portrait' : 'Landscape'}</Text>
-        </TouchableOpacity>
-
         {/* Firmware Button */}
         <TouchableOpacity
           activeOpacity={0.75}

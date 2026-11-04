@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  TouchableOpacity,
   Image,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { ActionState, ActionType } from '@/hooks/useCarController';
 
 interface ActionDeckProps {
@@ -14,6 +14,9 @@ interface ActionDeckProps {
   onTrigger: (type: ActionType) => void;
   disabled?: boolean;
   compact?: boolean;
+  burnoutGestureRef?: React.MutableRefObject<any>;
+  nitroGestureRef?: React.MutableRefObject<any>;
+  simultaneousHandlers?: React.MutableRefObject<any>[];
 }
 
 export const ActionDeck: React.FC<ActionDeckProps> = ({
@@ -21,101 +24,167 @@ export const ActionDeck: React.FC<ActionDeckProps> = ({
   onTrigger,
   disabled = false,
   compact = false,
+  burnoutGestureRef,
+  nitroGestureRef,
+  simultaneousHandlers,
 }) => {
   const isBurnoutActive = action?.name === 'burnout';
   const isNitroActive = action?.name === 'nitro';
+  const [pressedBurnout, setPressedBurnout] = useState(false);
+  const [pressedNitro, setPressedNitro] = useState(false);
+
+  const onTriggerRef = useRef(onTrigger);
+  onTriggerRef.current = onTrigger;
+
+  const burnoutGesture = useMemo(() => {
+    let g = Gesture.Pan()
+      .minDistance(0)
+      .minPointers(1)
+      .maxPointers(1)
+      .shouldCancelWhenOutside(false)
+      .runOnJS(true);
+
+    if (burnoutGestureRef) {
+      g = g.withRef(burnoutGestureRef);
+    }
+
+    if (simultaneousHandlers && simultaneousHandlers.length > 0) {
+      g = g.simultaneousWithExternalGesture(...simultaneousHandlers);
+    }
+
+    return g
+      .enabled(!disabled)
+      .onBegin(() => {
+        setPressedBurnout(true);
+        onTriggerRef.current('burnout');
+      })
+      .onFinalize(() => {
+        setPressedBurnout(false);
+      });
+  }, [disabled, burnoutGestureRef, simultaneousHandlers]);
+
+  const nitroGesture = useMemo(() => {
+    let g = Gesture.Pan()
+      .minDistance(0)
+      .minPointers(1)
+      .maxPointers(1)
+      .shouldCancelWhenOutside(false)
+      .runOnJS(true);
+
+    if (nitroGestureRef) {
+      g = g.withRef(nitroGestureRef);
+    }
+
+    if (simultaneousHandlers && simultaneousHandlers.length > 0) {
+      g = g.simultaneousWithExternalGesture(...simultaneousHandlers);
+    }
+
+    return g
+      .enabled(!disabled)
+      .onBegin(() => {
+        setPressedNitro(true);
+        onTriggerRef.current('nitro');
+      })
+      .onFinalize(() => {
+        setPressedNitro(false);
+      });
+  }, [disabled, nitroGestureRef, simultaneousHandlers]);
 
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>
       {/* BURNOUT BUTTON */}
-      <TouchableOpacity
-        activeOpacity={0.75}
-        disabled={disabled || (!!action && !isBurnoutActive)}
-        onPressIn={() => onTrigger('burnout')}
-        style={[
-          styles.button,
-          styles.burnoutBtn,
-          isBurnoutActive && styles.firingBurnout,
-          disabled && styles.btnDisabled,
-          compact && styles.compactButton,
-        ]}>
-        {/* Progress Fill */}
-        {isBurnoutActive && (
-          <View
-            style={[
-              styles.progressBar,
-              styles.progressBurnout,
-              { width: `${(action?.progress ?? 0) * 100}%` },
-            ]}
-          />
-        )}
+      <GestureDetector gesture={burnoutGesture}>
+        <View
+          // @ts-ignore
+          style={[
+            styles.button,
+            styles.burnoutBtn,
+            (isBurnoutActive || pressedBurnout) && styles.firingBurnout,
+            disabled && styles.btnDisabled,
+            compact && styles.compactButton,
+            { touchAction: 'none', userSelect: 'none' },
+          ]}>
+          {/* Progress Fill */}
+          {isBurnoutActive && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.progressBar,
+                styles.progressBurnout,
+                { width: `${(action?.progress ?? 0) * 100}%` },
+              ]}
+            />
+          )}
 
-        <View style={[styles.iconBox, compact && styles.compactIconBox]}>
-          <Image
-            source={require('@/assets/images/burnout-wheel.png')}
-            style={[styles.wheelImg, compact && styles.compactWheelImg]}
-            resizeMode="contain"
-          />
-        </View>
+          <View pointerEvents="none" style={[styles.iconBox, compact && styles.compactIconBox]}>
+            <Image
+              source={require('@/assets/images/burnout-wheel.png')}
+              style={[styles.wheelImg, compact && styles.compactWheelImg]}
+              resizeMode="contain"
+            />
+          </View>
 
-        <View style={styles.textContainer}>
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            style={[styles.titleBurnout, compact && styles.compactTitle]}>
-            BURNOUT
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={[styles.subtitleBurnout, compact && styles.compactSubtitle]}>
-            100% PWM <Text style={styles.highlight}>0.1s</Text>
-          </Text>
+          <View pointerEvents="none" style={styles.textContainer}>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={[styles.titleBurnout, compact && styles.compactTitle]}>
+              BURNOUT
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[styles.subtitleBurnout, compact && styles.compactSubtitle]}>
+              100% PWM <Text style={styles.highlight}>0.1s</Text>
+            </Text>
+          </View>
         </View>
-      </TouchableOpacity>
+      </GestureDetector>
 
       {/* NITRO BUTTON */}
-      <TouchableOpacity
-        activeOpacity={0.75}
-        disabled={disabled || (!!action && !isNitroActive)}
-        onPressIn={() => onTrigger('nitro')}
-        style={[
-          styles.button,
-          styles.nitroBtn,
-          isNitroActive && styles.firingNitro,
-          disabled && styles.btnDisabled,
-          compact && styles.compactButton,
-        ]}>
-        {/* Progress Fill */}
-        {isNitroActive && (
-          <View
-            style={[
-              styles.progressBar,
-              styles.progressNitro,
-              { width: `${(action?.progress ?? 0) * 100}%` },
-            ]}
-          />
-        )}
+      <GestureDetector gesture={nitroGesture}>
+        <View
+          // @ts-ignore
+          style={[
+            styles.button,
+            styles.nitroBtn,
+            (isNitroActive || pressedNitro) && styles.firingNitro,
+            disabled && styles.btnDisabled,
+            compact && styles.compactButton,
+            { touchAction: 'none', userSelect: 'none' },
+          ]}>
+          {/* Progress Fill */}
+          {isNitroActive && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.progressBar,
+                styles.progressNitro,
+                { width: `${(action?.progress ?? 0) * 100}%` },
+              ]}
+            />
+          )}
 
-        <View style={[styles.iconBox, styles.nitroIconBox, compact && styles.compactIconBox]}>
-          <Svg width={compact ? 14 : 22} height={compact ? 14 : 22} viewBox="0 0 24 24" fill="none" stroke="#a2c7ff" strokeWidth={2}>
-            <Path d="m14 2-10 12h7l-1 8 10-12h-7z" />
-          </Svg>
-        </View>
+          <View pointerEvents="none" style={[styles.iconBox, styles.nitroIconBox, compact && styles.compactIconBox]}>
+            <Svg width={compact ? 14 : 22} height={compact ? 14 : 22} viewBox="0 0 24 24" fill="none" stroke="#a2c7ff" strokeWidth={2}>
+              <Path d="m14 2-10 12h7l-1 8 10-12h-7z" />
+            </Svg>
+          </View>
 
-        <View style={styles.textContainer}>
-          <Text
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            style={[styles.titleNitro, compact && styles.compactTitle]}>
-            NITRO
-          </Text>
-          <Text
-            numberOfLines={1}
-            style={[styles.subtitleNitro, compact && styles.compactSubtitle]}>
-            100% PWM <Text style={styles.highlightNitro}>1s</Text>
-          </Text>
+          <View pointerEvents="none" style={styles.textContainer}>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={[styles.titleNitro, compact && styles.compactTitle]}>
+              NITRO
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[styles.subtitleNitro, compact && styles.compactSubtitle]}>
+              100% PWM <Text style={styles.highlightNitro}>1s</Text>
+            </Text>
+          </View>
         </View>
-      </TouchableOpacity>
+      </GestureDetector>
     </View>
   );
 };
@@ -123,135 +192,127 @@ export const ActionDeck: React.FC<ActionDeckProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
+    gap: 8,
     width: '100%',
   },
   compactContainer: {
-    paddingHorizontal: 0,
     gap: 6,
+    width: '100%',
   },
   button: {
     flex: 1,
-    height: 70,
-    borderRadius: 10,
+    height: 52,
+    borderRadius: 9,
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 10,
     position: 'relative',
     overflow: 'hidden',
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
   },
   compactButton: {
-    height: 38,
+    height: 42,
     paddingHorizontal: 6,
-    gap: 5,
-    borderRadius: 7,
+    borderRadius: 8,
   },
   burnoutBtn: {
-    backgroundColor: '#272023',
-    borderColor: '#4e3939',
+    backgroundColor: '#1d1916',
+    borderColor: '#4d2d1e',
   },
   nitroBtn: {
-    backgroundColor: '#20242e',
-    borderColor: '#3c475e',
+    backgroundColor: '#141c26',
+    borderColor: '#244569',
+  },
+  btnDisabled: {
+    opacity: 0.38,
   },
   firingBurnout: {
     borderColor: '#ff684b',
-    backgroundColor: '#352528',
+    backgroundColor: '#2d1c16',
   },
   firingNitro: {
     borderColor: '#6ea8ff',
-    backgroundColor: '#252e3d',
-  },
-  btnDisabled: {
-    opacity: 0.4,
+    backgroundColor: '#16283d',
   },
   progressBar: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     left: 0,
+    opacity: 0.35,
   },
   progressBurnout: {
-    backgroundColor: 'rgba(255, 104, 75, 0.28)',
+    backgroundColor: '#ff684b',
   },
   progressNitro: {
-    backgroundColor: 'rgba(110, 168, 255, 0.28)',
+    backgroundColor: '#6ea8ff',
   },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: 'rgba(239, 119, 99, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 139, 127, 0.2)',
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 104, 75, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 6,
   },
   compactIconBox: {
     width: 22,
     height: 22,
     borderRadius: 5,
+    marginRight: 4,
   },
   nitroIconBox: {
-    backgroundColor: 'rgba(145, 186, 255, 0.08)',
-    borderColor: 'rgba(145, 186, 255, 0.2)',
+    backgroundColor: 'rgba(110, 168, 255, 0.15)',
   },
   wheelImg: {
-    width: 24,
-    height: 24,
-    tintColor: '#ef8a80',
+    width: 22,
+    height: 22,
   },
   compactWheelImg: {
-    width: 14,
-    height: 14,
+    width: 17,
+    height: 17,
   },
   textContainer: {
     flex: 1,
-    overflow: 'hidden',
+    justifyContent: 'center',
   },
   titleBurnout: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: '#ffdeda',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#ffb295',
+    letterSpacing: 0.4,
   },
   titleNitro: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: '#e2edff',
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#b6d5ff',
+    letterSpacing: 0.4,
   },
   compactTitle: {
-    fontSize: 9,
-    letterSpacing: 0.3,
+    fontSize: 8.5,
   },
   subtitleBurnout: {
     fontSize: 7.5,
-    color: '#aa9497',
-    marginTop: 2,
+    fontFamily: 'monospace',
+    color: '#957c74',
+    marginTop: 1,
   },
   subtitleNitro: {
     fontSize: 7.5,
-    color: '#909fb9',
-    marginTop: 2,
-  },
-  compactSubtitle: {
-    fontSize: 6,
+    fontFamily: 'monospace',
+    color: '#75889e',
     marginTop: 1,
   },
+  compactSubtitle: {
+    fontSize: 6.5,
+  },
   highlight: {
-    color: '#cba9a7',
+    color: '#ff8266',
     fontWeight: '700',
   },
   highlightNitro: {
-    color: '#adbfdb',
+    color: '#8ec0ff',
     fontWeight: '700',
   },
 });

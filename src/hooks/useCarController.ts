@@ -96,6 +96,13 @@ export function useCarController() {
   const linkRef = useRef<SuperCarLink | null>(null);
   const idleModeRef = useRef<'drive' | 'stop'>('stop');
 
+  // Real-time multi-touch refs to prevent closure clobbering during simultaneous gestures
+  const throttleRef = useRef<number>(0);
+  const strafeRef = useRef<number>(0);
+  const steeringRef = useRef<number>(0);
+  const actionRef = useRef<ActionState | null>(null);
+  const quickRef = useRef<QuickState | null>(null);
+
   const triggerHaptic = useCallback((style: 'light' | 'medium' | 'heavy' = 'light') => {
     try {
       if (style === 'heavy') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -139,8 +146,13 @@ export function useCarController() {
       }
 
       setQuick(null);
+      quickRef.current = null;
       setAction(null);
+      actionRef.current = null;
       idleModeRef.current = completed ? 'drive' : 'stop';
+      throttleRef.current = 0;
+      strafeRef.current = 0;
+      steeringRef.current = 0;
       setThrottle(0);
       setStrafe(0);
       setSteering(0);
@@ -253,7 +265,7 @@ export function useCarController() {
   // Movement Joystick (Throttle & Strafe)
   const setThrottleAndStrafe = useCallback(
     (forward: number, lateral = 0) => {
-      if (!connected || maintenance || action || quick) return;
+      if (!connected || maintenance || quickRef.current) return;
       let f = forward;
       let l = driveMode === 'classic' ? 0 : lateral;
 
@@ -271,30 +283,32 @@ export function useCarController() {
         newX = length ? signedRound((l / length) * strength) : 0;
       }
 
+      throttleRef.current = newT;
+      strafeRef.current = newX;
       setThrottle(newT);
       setStrafe(newX);
-      sendTransportUpdate(action, quick, newT, newX, steering);
+      sendTransportUpdate(actionRef.current, quickRef.current, newT, newX, steeringRef.current);
     },
-    [connected, maintenance, action, quick, driveMode, steering, sendTransportUpdate]
+    [connected, maintenance, driveMode, sendTransportUpdate]
   );
 
   // Rotation / Steering Joystick
   const setSteeringInput = useCallback(
     (yaw: number) => {
-      if (!connected || maintenance || action || quick) return;
+      if (!connected || maintenance || quickRef.current) return;
       const clamped = Math.max(-1, Math.min(1, yaw));
       const s = magnitude(clamped);
+      steeringRef.current = s;
       setSteering(s);
-      sendTransportUpdate(action, quick, throttle, strafe, s);
+      sendTransportUpdate(actionRef.current, quickRef.current, throttleRef.current, strafeRef.current, s);
     },
-    [connected, maintenance, action, quick, throttle, strafe, sendTransportUpdate]
+    [connected, maintenance, sendTransportUpdate]
   );
 
   // Trigger Action (Burnout / Nitro)
   const startAction = useCallback(
     (name: ActionType): boolean => {
-      if (!connected || maintenance || (action && name !== 'burnout')) return false;
-      stopAll();
+      if (!connected || maintenance || (actionRef.current && name !== 'burnout')) return false;
 
       const duration = name === 'burnout' ? 100 : 1000;
       const nextId = ++actionCounterRef.current;
@@ -308,6 +322,7 @@ export function useCarController() {
         progress: 1,
       };
 
+      actionRef.current = newAction;
       setAction(newAction);
       triggerHaptic(name === 'burnout' ? 'heavy' : 'medium');
       announce(
@@ -316,7 +331,7 @@ export function useCarController() {
           : 'Nitro: all four motors at 100% for 1 second.'
       );
 
-      sendTransportUpdate(newAction, null, 0, 0, 0);
+      sendTransportUpdate(newAction, null, throttleRef.current, strafeRef.current, steeringRef.current);
 
       const tick = () => {
         const currentNow = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -324,7 +339,10 @@ export function useCarController() {
         const remaining = Math.max(0, 1 - elapsed / duration);
 
         if (remaining <= 0) {
-          stopAll('Action complete. Controls neutral — ready to drive.', true);
+          actionRef.current = null;
+          setAction(null);
+          sendTransportUpdate(null, null, throttleRef.current, strafeRef.current, steeringRef.current);
+          announce('Action complete. Ready to drive.');
         } else {
           setAction((prev) => (prev ? { ...prev, progress: remaining } : null));
           animFrameRef.current = requestAnimationFrame(tick);
@@ -334,17 +352,18 @@ export function useCarController() {
       animFrameRef.current = requestAnimationFrame(tick);
       return true;
     },
-    [connected, maintenance, action, stopAll, triggerHaptic, announce, sendTransportUpdate]
+    [connected, maintenance, triggerHaptic, announce, sendTransportUpdate]
   );
 
   // Trigger Quick Moves Presets
   const startQuick = useCallback(
     (name: string): boolean => {
-      if (!connected || maintenance || action || quick || driveMode !== 'mecanum') return false;
+      if (!connected || maintenance || actionRef.current || quickRef.current || driveMode !== 'mecanum') return false;
       stopAll();
 
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const newQuick: QuickState = { name, start: now };
+      quickRef.current = newQuick;
       setQuick(newQuick);
       triggerHaptic('light');
       announce(`${QUICK_NAMES[name] || name}: 80% PWM; hold to move, release to stop.`);
@@ -387,6 +406,9 @@ export function useCarController() {
         const signedX = signedRound(x);
         const signedS = signedRound(s);
 
+        throttleRef.current = signedT;
+        strafeRef.current = signedX;
+        steeringRef.current = signedS;
         setThrottle(signedT);
         setStrafe(signedX);
         setSteering(signedS);
@@ -398,14 +420,13 @@ export function useCarController() {
       quickAnimFrameRef.current = requestAnimationFrame(tick);
       return true;
     },
-    [connected, maintenance, action, quick, driveMode, stopAll, triggerHaptic, announce, sendTransportUpdate]
+    [connected, maintenance, driveMode, stopAll, triggerHaptic, announce, sendTransportUpdate]
   );
 
   const stopQuick = useCallback(() => {
-    if (quick) {
-      stopAll('Quick move released. Controls neutral.');
-    }
-  }, [quick, stopAll]);
+    quickRef.current = null;
+    stopAll('Quick move released. Controls neutral.');
+  }, [stopAll]);
 
   // Compute live motor outputs
   const motorOutputs = calculateMotorOutputs(
