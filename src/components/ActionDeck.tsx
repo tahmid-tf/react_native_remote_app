@@ -59,8 +59,15 @@ export const ActionDeck: React.FC<ActionDeckProps> = ({
         </View>
 
         <View style={styles.textContainer}>
-          <Text style={[styles.titleBurnout, compact && styles.compactTitle]}>BURNOUT</Text>
-          <Text style={[styles.subtitleBurnout, compact && styles.compactSubtitle]}>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={[styles.titleBurnout, compact && styles.compactTitle]}>
+            BURNOUT
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.subtitleBurnout, compact && styles.compactSubtitle]}>
             100% PWM <Text style={styles.highlight}>0.1s</Text>
           </Text>
         </View>
@@ -90,14 +97,21 @@ export const ActionDeck: React.FC<ActionDeckProps> = ({
         )}
 
         <View style={[styles.iconBox, styles.nitroIconBox, compact && styles.compactIconBox]}>
-          <Svg width={compact ? 16 : 22} height={compact ? 16 : 22} viewBox="0 0 24 24" fill="none" stroke="#a2c7ff" strokeWidth={2}>
+          <Svg width={compact ? 14 : 22} height={compact ? 14 : 22} viewBox="0 0 24 24" fill="none" stroke="#a2c7ff" strokeWidth={2}>
             <Path d="m14 2-10 12h7l-1 8 10-12h-7z" />
           </Svg>
         </View>
 
         <View style={styles.textContainer}>
-          <Text style={[styles.titleNitro, compact && styles.compactTitle]}>NITRO</Text>
-          <Text style={[styles.subtitleNitro, compact && styles.compactSubtitle]}>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            style={[styles.titleNitro, compact && styles.compactTitle]}>
+            NITRO
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[styles.subtitleNitro, compact && styles.compactSubtitle]}>
             100% PWM <Text style={styles.highlightNitro}>1s</Text>
           </Text>
         </View>
@@ -115,7 +129,7 @@ const styles = StyleSheet.create({
   },
   compactContainer: {
     paddingHorizontal: 0,
-    gap: 8,
+    gap: 6,
   },
   button: {
     flex: 1,
@@ -134,10 +148,10 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   compactButton: {
-    height: 42,
-    paddingHorizontal: 8,
-    gap: 6,
-    borderRadius: 8,
+    height: 38,
+    paddingHorizontal: 6,
+    gap: 5,
+    borderRadius: 7,
   },
   burnoutBtn: {
     backgroundColor: '#272023',
@@ -181,9 +195,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   compactIconBox: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 5,
   },
   nitroIconBox: {
     backgroundColor: 'rgba(145, 186, 255, 0.08)',
@@ -195,11 +209,12 @@ const styles = StyleSheet.create({
     tintColor: '#ef8a80',
   },
   compactWheelImg: {
-    width: 18,
-    height: 18,
+    width: 14,
+    height: 14,
   },
   textContainer: {
     flex: 1,
+    overflow: 'hidden',
   },
   titleBurnout: {
     fontSize: 13,
@@ -214,8 +229,8 @@ const styles = StyleSheet.create({
     color: '#e2edff',
   },
   compactTitle: {
-    fontSize: 10,
-    letterSpacing: 0.8,
+    fontSize: 9,
+    letterSpacing: 0.3,
   },
   subtitleBurnout: {
     fontSize: 7.5,
@@ -228,7 +243,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   compactSubtitle: {
-    fontSize: 6.5,
+    fontSize: 6,
     marginTop: 1,
   },
   highlight: {

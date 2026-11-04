@@ -47,6 +47,7 @@ export class SuperCarLink {
   private timer: any;
   private abortController: AbortController | null;
   private baseUrl: string;
+  private consecutiveErrors: number;
 
   constructor(onStatus: StatusCallback, baseUrl = 'http://192.168.4.1') {
     this.onStatus = onStatus;
@@ -61,6 +62,7 @@ export class SuperCarLink {
     this.inFlight = false;
     this.timer = null;
     this.abortController = null;
+    this.consecutiveErrors = 0;
   }
 
   setBaseUrl(url: string) {
@@ -162,17 +164,28 @@ export class SuperCarLink {
       }
 
       if (epoch !== this.epoch) return;
+      this.consecutiveErrors = 0;
       this.connected = true;
       this.onStatus(true, data.motors);
     } catch (error: any) {
       if (epoch !== this.epoch) return;
-      this.connected = false;
-      this.latest = this.neutral();
-      this.onStatus(false, [0, 0, 0, 0], error?.message || 'Connection error');
+      if (error?.name === 'AbortError') return;
+
+      this.consecutiveErrors++;
+      // Only transition to disconnected after 3 consecutive failures to absorb Wi-Fi jitter
+      if (this.consecutiveErrors >= 3 || !this.connected) {
+        this.connected = false;
+        this.latest = this.neutral();
+        this.onStatus(false, [0, 0, 0, 0], error?.message || 'Connection error');
+      }
     } finally {
       clearTimeout(timeout);
       if (epoch === this.epoch) {
         this.inFlight = false;
+        // If a new command arrived while this request was in flight, dispatch it immediately
+        if (JSON.stringify(this.latest) !== JSON.stringify(command)) {
+          this.send();
+        }
       }
     }
   }
@@ -182,9 +195,12 @@ export class SuperCarLink {
     this.active = active;
     this.epoch++;
     if (this.abortController) {
-      this.abortController.abort();
+      try {
+        this.abortController.abort();
+      } catch {}
     }
     this.inFlight = false;
+    this.consecutiveErrors = 0;
     this.latest = this.neutral();
     this.connected = false;
 

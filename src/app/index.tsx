@@ -4,11 +4,12 @@ import {
   View,
   Text,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Platform,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useCarController } from '@/hooks/useCarController';
 import { useOrientation } from '@/hooks/useOrientation';
 import { TopBar } from '@/components/TopBar';
@@ -48,20 +49,32 @@ export default function RemoteScreen() {
   } = useCarController();
 
   const { isLandscape, toggleOrientation, width, height } = useOrientation();
+  const insets = useSafeAreaInsets();
 
   const [firmwareModalOpen, setFirmwareModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
   // Compute responsive joystick size
+  const landscapeAvailableH = height - (isLandscape ? 40 : insets.top) - insets.bottom;
   const joystickSize = isLandscape
-    ? Math.max(120, Math.min(150, height * 0.44))
+    ? Math.max(120, Math.min(145, landscapeAvailableH * 0.48))
     : Math.max(140, Math.min(185, (width - 48) / 2));
 
   const isClassic = driveMode === 'classic';
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <View style={styles.safeArea}>
+      <StatusBar hidden={isLandscape} style="light" />
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: isLandscape ? Math.max(insets.top, 2) : insets.top,
+            paddingBottom: Math.max(insets.bottom, 2),
+            paddingLeft: Math.max(insets.left, 6),
+            paddingRight: Math.max(insets.right, 6),
+          },
+        ]}>
         {/* Top Navigation Bar */}
         <TopBar
           connected={connected}
@@ -179,7 +192,9 @@ export default function RemoteScreen() {
                   <Svg width={12} height={12} viewBox="0 0 24 24" fill="#ff684b">
                     <Path d="M6 6h12v12H6z" />
                   </Svg>
-                  <Text style={styles.landscapeStopBtnText}>STOP / NEUTRAL</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={styles.landscapeStopBtnText}>
+                    STOP / NEUTRAL
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -356,7 +371,7 @@ export default function RemoteScreen() {
           onReconnect={toggleConnection}
         />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -578,18 +593,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 2,
   },
   landscapeLeftWing: {
-    width: '28%',
+    width: '31%',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
   },
   landscapeActionBox: {
     width: '100%',
-    marginTop: 6,
+    marginTop: 4,
   },
   landscapeCenter: {
     flex: 1,
@@ -600,8 +615,8 @@ const styles = StyleSheet.create({
     borderColor: '#2b2e35',
     borderRadius: 14,
     paddingVertical: 4,
-    paddingHorizontal: 8,
-    marginHorizontal: 6,
+    paddingHorizontal: 6,
+    marginHorizontal: 4,
     alignSelf: 'stretch',
   },
   landscapeCenterHead: {
@@ -639,18 +654,18 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   landscapeRightWing: {
-    width: '28%',
+    width: '31%',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
   },
   landscapeRightFooter: {
     width: '100%',
-    marginTop: 6,
+    marginTop: 4,
   },
   landscapeStopBtn: {
-    height: 42,
-    borderRadius: 8,
+    height: 38,
+    borderRadius: 7,
     backgroundColor: '#271b1d',
     borderWidth: 1,
     borderColor: '#542d32',
@@ -660,9 +675,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   landscapeStopBtnText: {
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: '700',
-    letterSpacing: 1.2,
+    letterSpacing: 0.8,
     color: '#ff8a75',
   },
 });

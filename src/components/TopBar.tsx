@@ -42,25 +42,29 @@ export const TopBar: React.FC<TopBarProps> = ({
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={onToggleConnection}
-        style={[styles.connectionPill, !connected && styles.pillDisconnected]}>
+        style={[
+          styles.connectionPill,
+          compact && styles.compactConnectionPill,
+          !connected && styles.pillDisconnected,
+        ]}>
         <View style={[styles.statusDot, !connected && styles.dotDisconnected]} />
-        <Text style={[styles.connectionText, !connected && styles.textDisconnected]}>
+        <Text style={[styles.connectionText, compact && styles.compactConnectionText, !connected && styles.textDisconnected]}>
           {connected ? 'CAR CONNECTED' : 'DISCONNECTED'}
         </Text>
-        <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={connected ? '#8ad8b1' : '#e68c83'} strokeWidth={2}>
+        <Svg width={compact ? 12 : 14} height={compact ? 12 : 14} viewBox="0 0 24 24" fill="none" stroke={connected ? '#8ad8b1' : '#e68c83'} strokeWidth={2}>
           <Path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0M12 20h.01" />
         </Svg>
       </TouchableOpacity>
 
       {/* Tools */}
-      <View style={styles.tools}>
+      <View style={[styles.tools, compact && styles.compactTools]}>
         {/* Orientation Toggle Button */}
         <TouchableOpacity
           activeOpacity={0.75}
           onPress={onToggleOrientation}
-          style={styles.toolBtn}
+          style={[styles.toolBtn, compact && styles.compactToolBtn]}
           accessibilityLabel="Toggle vertical / horizontal orientation">
-          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#bdc4cf" strokeWidth={2}>
+          <Svg width={compact ? 12 : 14} height={compact ? 12 : 14} viewBox="0 0 24 24" fill="none" stroke="#bdc4cf" strokeWidth={2}>
             {isLandscape ? (
               // Portrait phone icon
               <Path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM12 18h.01" />
@@ -69,26 +73,26 @@ export const TopBar: React.FC<TopBarProps> = ({
               <Path d="M2 6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6zM18 12h.01" />
             )}
           </Svg>
-          <Text style={styles.toolBtnText}>{isLandscape ? 'Portrait' : 'Landscape'}</Text>
+          <Text style={[styles.toolBtnText, compact && styles.compactToolBtnText]}>{isLandscape ? 'Portrait' : 'Landscape'}</Text>
         </TouchableOpacity>
 
         {/* Firmware Button */}
         <TouchableOpacity
           activeOpacity={0.75}
           onPress={onOpenFirmware}
-          style={styles.toolBtn}>
-          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#bdc4cf" strokeWidth={2}>
+          style={[styles.toolBtn, compact && styles.compactToolBtn]}>
+          <Svg width={compact ? 12 : 14} height={compact ? 12 : 14} viewBox="0 0 24 24" fill="none" stroke="#bdc4cf" strokeWidth={2}>
             <Path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5" />
           </Svg>
-          <Text style={styles.toolBtnText}>Firmware</Text>
+          <Text style={[styles.toolBtnText, compact && styles.compactToolBtnText]}>Firmware</Text>
         </TouchableOpacity>
 
         {/* Settings Button */}
         <TouchableOpacity
           activeOpacity={0.75}
           onPress={onOpenSettings}
-          style={styles.iconBtn}>
-          <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#8c929e" strokeWidth={2}>
+          style={[styles.iconBtn, compact && styles.compactIconBtn]}>
+          <Svg width={compact ? 14 : 16} height={compact ? 14 : 16} viewBox="0 0 24 24" fill="none" stroke="#8c929e" strokeWidth={2}>
             <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
             <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </Svg>
@@ -170,6 +174,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(138, 216, 177, 0.25)',
   },
+  compactConnectionPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    gap: 4,
+  },
+  compactConnectionText: {
+    fontSize: 7,
+  },
   pillDisconnected: {
     backgroundColor: 'rgba(230, 140, 131, 0.06)',
     borderColor: 'rgba(230, 140, 131, 0.25)',
@@ -197,6 +209,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  compactTools: {
+    gap: 5,
+  },
   toolBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -208,10 +223,18 @@ const styles = StyleSheet.create({
     borderColor: '#3b424e',
     borderRadius: 6,
   },
+  compactToolBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 4,
+  },
   toolBtnText: {
     fontSize: 9,
     color: '#c6ccd6',
     fontWeight: '600',
+  },
+  compactToolBtnText: {
+    fontSize: 8,
   },
   iconBtn: {
     width: 32,
@@ -222,5 +245,9 @@ const styles = StyleSheet.create({
     borderColor: '#3b424e',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  compactIconBtn: {
+    width: 26,
+    height: 26,
   },
 });

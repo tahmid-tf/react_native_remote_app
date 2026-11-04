@@ -5,6 +5,7 @@ import {
   Text,
   Animated,
   GestureResponderEvent,
+  Platform,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -35,6 +36,19 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
   const startX = useRef<number>(0);
   const [engaged, setEngaged] = useState(false);
 
+  const handleRelease = () => {
+    if (activeTouchId.current === null && !engaged) return;
+    activeTouchId.current = null;
+    setEngaged(false);
+    Animated.spring(knobAnimX, {
+      toValue: 0,
+      friction: 6,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
+    onChange(0);
+  };
+
   const onTouchStart = (e: GestureResponderEvent) => {
     if (disabled || activeTouchId.current !== null) return;
     const touch = e.nativeEvent;
@@ -52,6 +66,8 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
     );
     if (touch) {
       handleMove(touch.pageX);
+    } else {
+      handleRelease();
     }
   };
 
@@ -64,20 +80,33 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
   };
 
   const onTouchEnd = (e: GestureResponderEvent) => {
+    if (activeTouchId.current === null) return;
     const ended = Array.from(e.nativeEvent.changedTouches).some(
       (t) => t.identifier === activeTouchId.current
     );
     if (ended || e.nativeEvent.touches.length === 0) {
-      activeTouchId.current = null;
-      setEngaged(false);
-      Animated.spring(knobAnimX, {
-        toValue: 0,
-        friction: 6,
-        tension: 80,
-        useNativeDriver: true,
-      }).start();
-      onChange(0);
+      handleRelease();
     }
+  };
+
+  const onPointerDown = (e: any) => {
+    if (disabled) return;
+    if (Platform.OS === 'web' && e?.target?.setPointerCapture && e?.pointerId !== undefined) {
+      try {
+        e.target.setPointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
+
+  const onPointerUp = (e: any) => {
+    if (Platform.OS === 'web' && e?.target?.releasePointerCapture && e?.pointerId !== undefined) {
+      try {
+        if (e.target.hasPointerCapture?.(e.pointerId)) {
+          e.target.releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+    }
+    handleRelease();
   };
 
   const isClassic = driveMode === 'classic';
@@ -101,22 +130,32 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
       </View>
 
       {/* Stick Area */}
-      <View style={[styles.stickArea, { height: size + (compact ? 18 : 26) }]}>
+      <View
+        style={[styles.stickArea, { height: size + (compact ? 18 : 26) }]}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={handleRelease}
+        // @ts-ignore
+        onPointerDown={onPointerDown}
+        // @ts-ignore
+        onPointerUp={onPointerUp}
+        // @ts-ignore
+        onPointerCancel={handleRelease}
+        // @ts-ignore
+        onLostPointerCapture={handleRelease}>
         <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>
           {isClassic ? 'STEER' : 'ROTATE'}
         </Text>
 
         <View
+          pointerEvents="none"
           style={[
             styles.well,
             { width: size, height: size, borderRadius: size / 2 },
             isEngaged && styles.wellEngagedBlue,
             disabled && styles.disabled,
-          ]}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onTouchCancel={onTouchEnd}>
+          ]}>
           {/* Subtle axis track guide */}
           <View pointerEvents="none" style={styles.horizontalTrack} />
           <View pointerEvents="none" style={styles.crosshairH} />
@@ -207,6 +246,27 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
   const [engaged, setEngaged] = useState(false);
   const isClassic = driveMode === 'classic';
 
+  const handleRelease = () => {
+    if (activeTouchId.current === null && !engaged) return;
+    activeTouchId.current = null;
+    setEngaged(false);
+    Animated.parallel([
+      Animated.spring(knobAnimX, {
+        toValue: 0,
+        friction: 6,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+      Animated.spring(knobAnimY, {
+        toValue: 0,
+        friction: 6,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    onChange(0, 0);
+  };
+
   const onTouchStart = (e: GestureResponderEvent) => {
     if (disabled || activeTouchId.current !== null) return;
     const touch = e.nativeEvent;
@@ -225,6 +285,8 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
     );
     if (touch) {
       handleMove(touch.pageX, touch.pageY);
+    } else {
+      handleRelease();
     }
   };
 
@@ -248,28 +310,33 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
   };
 
   const onTouchEnd = (e: GestureResponderEvent) => {
+    if (activeTouchId.current === null) return;
     const ended = Array.from(e.nativeEvent.changedTouches).some(
       (t) => t.identifier === activeTouchId.current
     );
     if (ended || e.nativeEvent.touches.length === 0) {
-      activeTouchId.current = null;
-      setEngaged(false);
-      Animated.parallel([
-        Animated.spring(knobAnimX, {
-          toValue: 0,
-          friction: 6,
-          tension: 80,
-          useNativeDriver: true,
-        }),
-        Animated.spring(knobAnimY, {
-          toValue: 0,
-          friction: 6,
-          tension: 80,
-          useNativeDriver: true,
-        }),
-      ]).start();
-      onChange(0, 0);
+      handleRelease();
     }
+  };
+
+  const onPointerDown = (e: any) => {
+    if (disabled) return;
+    if (Platform.OS === 'web' && e?.target?.setPointerCapture && e?.pointerId !== undefined) {
+      try {
+        e.target.setPointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
+
+  const onPointerUp = (e: any) => {
+    if (Platform.OS === 'web' && e?.target?.releasePointerCapture && e?.pointerId !== undefined) {
+      try {
+        if (e.target.hasPointerCapture?.(e.pointerId)) {
+          e.target.releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+    }
+    handleRelease();
   };
 
   const componentMag = Math.round(Math.hypot(throttle, strafe));
@@ -298,7 +365,20 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
       </View>
 
       {/* Stick Area */}
-      <View style={[styles.stickArea, { height: size + (compact ? 18 : 26) }]}>
+      <View
+        style={[styles.stickArea, { height: size + (compact ? 18 : 26) }]}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={handleRelease}
+        // @ts-ignore
+        onPointerDown={onPointerDown}
+        // @ts-ignore
+        onPointerUp={onPointerUp}
+        // @ts-ignore
+        onPointerCancel={handleRelease}
+        // @ts-ignore
+        onLostPointerCapture={handleRelease}>
         <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>FORWARD</Text>
         {!isClassic && (
           <>
@@ -308,16 +388,13 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
         )}
 
         <View
+          pointerEvents="none"
           style={[
             styles.well,
             { width: size, height: size, borderRadius: size / 2 },
             isEngaged && styles.wellEngagedOrange,
             disabled && styles.disabled,
-          ]}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onTouchCancel={onTouchEnd}>
+          ]}>
           <View pointerEvents="none" style={styles.crosshairH} />
           <View pointerEvents="none" style={styles.crosshairV} />
           {isClassic && <View pointerEvents="none" style={styles.verticalTrack} />}
