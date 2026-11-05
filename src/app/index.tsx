@@ -83,9 +83,20 @@ export default function RemoteScreen() {
     });
   }, [stopAll]);
 
-  // Compute responsive joystick size for dedicated landscape screen
-  const availableHeight = height - 40 - Math.max(insets.top, 2) - Math.max(insets.bottom, 2);
-  const joystickSize = Math.max(120, Math.min(145, availableHeight * 0.52));
+  // Compute responsive layout dimensions for any Android screen (320dp to 480dp+ height)
+  const safeTop = Math.max(insets.top, 2);
+  const safeBottom = Math.max(insets.bottom, 2);
+  const safeLeft = Math.max(insets.left, 6);
+  const safeRight = Math.max(insets.right, 6);
+
+  const availableHeight = height - 38 - safeTop - safeBottom;
+  const availableWidth = width - safeLeft - safeRight;
+  const maxWingWidth = availableWidth * 0.30;
+
+  // Joystick diameter smoothly scales from 96px on compact screens up to 135px on larger devices
+  const joystickSize = Math.round(
+    Math.max(96, Math.min(135, availableHeight * 0.44, maxWingWidth * 0.82))
+  );
 
   const isClassic = driveMode === 'classic';
 
@@ -241,7 +252,8 @@ export default function RemoteScreen() {
           </View>
         </View>
 
-        {/* Firmware OTA Update Modal */}
+        {/* Firmware OTA Update Modal - Hidden for end-user protection (uncomment to re-enable) */}
+        {/*
         <FirmwareModal
           visible={firmwareModalOpen}
           onClose={() => setFirmwareModalOpen(false)}
@@ -249,6 +261,7 @@ export default function RemoteScreen() {
           serverUrl={serverUrl}
           onPauseControls={(paused) => setMaintenance(paused)}
         />
+        */}
 
         {/* Settings & Diagnostics Modal */}
         <SettingsModal
@@ -336,30 +349,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
   landscapeLeftWing: {
-    width: '31%',
+    width: '30%',
+    maxWidth: 215,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 2,
+    paddingVertical: 1,
   },
   landscapeActionBox: {
     width: '100%',
-    marginTop: 4,
+    marginTop: 3,
   },
   landscapeCenter: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     backgroundColor: '#121419',
     borderWidth: 1,
     borderColor: '#262a34',
     borderRadius: 14,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    marginHorizontal: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 5,
+    marginHorizontal: 4,
     alignSelf: 'stretch',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -368,7 +382,7 @@ const styles = StyleSheet.create({
   },
   landscapeCenterHead: {
     width: '100%',
-    height: 26,
+    height: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -382,7 +396,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(110, 168, 255, 0.08)',
     borderRadius: 12,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2.5,
   },
   modeBtnDisabled: {
     borderColor: '#262d3a',
@@ -398,7 +412,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   carStageWrapper: {
-    marginVertical: 2,
+    marginVertical: 1,
     alignItems: 'center',
   },
   landscapePresetBox: {
@@ -407,21 +421,22 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   landscapeAnnouncementText: {
-    fontSize: 8,
+    fontSize: 7.5,
     color: '#86909d',
     textAlign: 'center',
-    marginTop: 2,
+    marginTop: 1,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   landscapeRightWing: {
-    width: '31%',
+    width: '30%',
+    maxWidth: 215,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 2,
+    paddingVertical: 1,
   },
   landscapeRightFooter: {
     width: '100%',
-    marginTop: 4,
+    marginTop: 3,
   },
   landscapeStopBtn: {
     height: 38,

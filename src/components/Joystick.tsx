@@ -95,7 +95,7 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
   const isEngaged = engaged || value !== 0;
 
   return (
-    <View style={[styles.panel, { width: size }]}>
+    <View style={[styles.panel, compact && styles.compactPanel, { width: '100%', maxWidth: size + 24 }]}>
       {/* Header */}
       <View style={styles.heading}>
         <Text style={styles.number}>01</Text>
@@ -109,7 +109,7 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
       <GestureDetector gesture={panGesture}>
         <View
           // @ts-ignore
-          style={[styles.stickArea, { height: size + (compact ? 18 : 26), touchAction: 'none', userSelect: 'none' }]}>
+          style={[styles.stickArea, { height: size + (compact ? 14 : 24), touchAction: 'none', userSelect: 'none' }]}>
           <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>
             {isClassic ? 'STEER' : 'ROTATE'}
           </Text>
@@ -304,7 +304,7 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
   const isEngaged = engaged || throttle !== 0 || strafe !== 0;
 
   return (
-    <View style={[styles.panel, { width: size }]}>
+    <View style={[styles.panel, compact && styles.compactPanel, { width: '100%', maxWidth: size + 24 }]}>
       {/* Header */}
       <View style={styles.heading}>
         <Text style={styles.number}>02</Text>
@@ -318,7 +318,7 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
       <GestureDetector gesture={panGesture}>
         <View
           // @ts-ignore
-          style={[styles.stickArea, { height: size + (compact ? 18 : 26), touchAction: 'none', userSelect: 'none' }]}>
+          style={[styles.stickArea, { height: size + (compact ? 14 : 24), touchAction: 'none', userSelect: 'none' }]}>
           <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>FORWARD</Text>
           {!isClassic && (
             <>
@@ -409,9 +409,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#26292f',
     borderRadius: 14,
-    padding: 10,
+    padding: 8,
     alignItems: 'center',
-    marginVertical: 4,
+    marginVertical: 2,
+    alignSelf: 'center',
+  },
+  compactPanel: {
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    marginVertical: 1,
+    borderRadius: 12,
   },
   heading: {
     width: '100%',

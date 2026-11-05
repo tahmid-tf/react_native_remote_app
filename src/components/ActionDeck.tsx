@@ -128,11 +128,14 @@ export const ActionDeck: React.FC<ActionDeckProps> = ({
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
+              minimumFontScale={0.75}
               style={[styles.titleBurnout, compact && styles.compactTitle]}>
               BURNOUT
             </Text>
             <Text
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
               style={[styles.subtitleBurnout, compact && styles.compactSubtitle]}>
               100% PWM <Text style={styles.highlight}>0.1s</Text>
             </Text>
@@ -174,11 +177,14 @@ export const ActionDeck: React.FC<ActionDeckProps> = ({
             <Text
               numberOfLines={1}
               adjustsFontSizeToFit
+              minimumFontScale={0.75}
               style={[styles.titleNitro, compact && styles.compactTitle]}>
               NITRO
             </Text>
             <Text
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
               style={[styles.subtitleNitro, compact && styles.compactSubtitle]}>
               100% PWM <Text style={styles.highlightNitro}>1s</Text>
             </Text>
@@ -211,9 +217,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   compactButton: {
-    height: 42,
-    paddingHorizontal: 6,
-    borderRadius: 8,
+    height: 38,
+    paddingHorizontal: 5,
+    borderRadius: 7,
   },
   burnoutBtn: {
     backgroundColor: '#1d1916',

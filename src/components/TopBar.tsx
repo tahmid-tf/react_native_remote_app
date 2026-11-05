@@ -28,14 +28,18 @@ export const TopBar: React.FC<TopBarProps> = ({
         </View>
         <View style={styles.brandTextCol}>
           <View style={styles.brandTitleRow}>
-            <Text style={[styles.brandName, compact && styles.compactBrandName]}>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+              style={[styles.brandName, compact && styles.compactBrandName]}>
               SUPER<Text style={styles.brandAccent}>CAR</Text>
             </Text>
             <View style={styles.proBadge}>
               <Text style={styles.proBadgeText}>PRO</Text>
             </View>
           </View>
-          <Text style={styles.brandSubtitle}>ESP32 RC COCKPIT</Text>
+          <Text numberOfLines={1} style={styles.brandSubtitle}>ESP32 RC COCKPIT</Text>
         </View>
       </View>
 
@@ -49,7 +53,11 @@ export const TopBar: React.FC<TopBarProps> = ({
           !connected && styles.pillDisconnected,
         ]}>
         <View style={[styles.statusDot, !connected && styles.dotDisconnected]} />
-        <Text style={[styles.connectionText, compact && styles.compactConnectionText, !connected && styles.textDisconnected]}>
+        <Text
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
+          style={[styles.connectionText, compact && styles.compactConnectionText, !connected && styles.textDisconnected]}>
           {connected ? 'LINK ACTIVE' : 'DISCONNECTED'}
         </Text>
         <Svg width={compact ? 13 : 15} height={compact ? 13 : 15} viewBox="0 0 24 24" fill="none" stroke={connected ? '#80e0b0' : '#e68c83'} strokeWidth={2.2}>
@@ -59,7 +67,8 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Tools */}
       <View style={[styles.tools, compact && styles.compactTools]}>
-        {/* Firmware Button */}
+        {/* Firmware OTA Button - Hidden for end-user protection (uncomment to re-enable) */}
+        {/*
         <TouchableOpacity
           activeOpacity={0.75}
           onPress={onOpenFirmware}
@@ -69,6 +78,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </Svg>
           <Text style={[styles.toolBtnText, compact && styles.compactToolBtnText]}>OTA</Text>
         </TouchableOpacity>
+        */}
 
         {/* Settings Button */}
         <TouchableOpacity

@@ -152,6 +152,8 @@ const PresetButtonCell: React.FC<{
         <View style={styles.cellTextColumn}>
           <Text
             numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.75}
             style={[
               styles.cellTitle,
               isFiring && styles.firingTitle,
@@ -161,6 +163,8 @@ const PresetButtonCell: React.FC<{
           </Text>
           <Text
             numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.7}
             style={[
               styles.cellTelemetry,
               isFiring && styles.firingTelemetry,
@@ -339,14 +343,14 @@ const styles = StyleSheet.create({
   /* Individual Button Cell */
   buttonCell: {
     flex: 1,
-    height: 32,
+    height: 31,
     backgroundColor: '#161a22',
     borderWidth: 1,
     borderColor: '#262f3d',
     borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     paddingVertical: 2,
     position: 'relative',
     overflow: 'hidden',
