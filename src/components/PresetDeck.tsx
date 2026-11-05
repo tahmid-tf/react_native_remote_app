@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
-  ScrollView,
+  Platform,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -22,116 +22,20 @@ interface PresetItem {
   id: string;
   name: string;
   desc: string;
+  telemetry: string;
   icon: (color: string, size?: number) => React.ReactNode;
 }
-
-const CompactPresetButton: React.FC<{
-  item: PresetItem;
-  isFiring: boolean;
-  isBlocked: boolean;
-  onStart: (name: string) => void;
-  onStop: () => void;
-}> = ({ item, isFiring, isBlocked, onStart, onStop }) => {
-  const strokeColor = isFiring ? '#6ea8ff' : '#909cad';
-
-  const gesture = useMemo(() => {
-    return Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true)
-      .enabled(!isBlocked)
-      .onBegin(() => {
-        onStart(item.id);
-      })
-      .onFinalize(() => {
-        onStop();
-      });
-  }, [isBlocked, item.id, onStart, onStop]);
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <View
-        // @ts-ignore
-        style={[
-          styles.compactRibbonBtn,
-          isFiring && styles.firingBtn,
-          isBlocked && styles.disabledBtn,
-          { touchAction: 'none', userSelect: 'none' },
-        ]}>
-        {item.icon(strokeColor, 14)}
-        <Text
-          style={[
-            styles.compactRibbonText,
-            isFiring && styles.firingText,
-          ]}>
-          {item.name}
-        </Text>
-      </View>
-    </GestureDetector>
-  );
-};
-
-const GridPresetButton: React.FC<{
-  item: PresetItem;
-  isFiring: boolean;
-  isBlocked: boolean;
-  onStart: (name: string) => void;
-  onStop: () => void;
-}> = ({ item, isFiring, isBlocked, onStart, onStop }) => {
-  const strokeColor = isFiring ? '#6ea8ff' : '#909cad';
-
-  const gesture = useMemo(() => {
-    return Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true)
-      .enabled(!isBlocked)
-      .onBegin(() => {
-        onStart(item.id);
-      })
-      .onFinalize(() => {
-        onStop();
-      });
-  }, [isBlocked, item.id, onStart, onStop]);
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <View
-        // @ts-ignore
-        style={[
-          styles.button,
-          isFiring && styles.firingBtn,
-          isBlocked && styles.disabledBtn,
-          { touchAction: 'none', userSelect: 'none' },
-        ]}>
-        <View style={styles.iconWrapper}>{item.icon(strokeColor, 18)}</View>
-        <View style={styles.textCol}>
-          <Text
-            style={[
-              styles.btnName,
-              isFiring && styles.firingText,
-            ]}>
-            {item.name}
-          </Text>
-          <Text style={styles.btnDesc}>{item.desc}</Text>
-        </View>
-      </View>
-    </GestureDetector>
-  );
-};
 
 const PRESETS: PresetItem[] = [
   {
     id: 'orbit',
     name: 'Orbit',
     desc: 'SIDE + ROTATION',
-    icon: (c, s = 18) => (
-      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2}>
-        <Path d="M20 12a8 8 0 1 1-8-8m3-2 5 2-3 4M12 10v4m-2-2h4" />
+    telemetry: '360° ORBIT',
+    icon: (c, s = 15) => (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.8 1 6.5 2.7M21 3v6h-6" />
+        <Path d="M12 9v6m-3-3h6" />
       </Svg>
     ),
   },
@@ -139,9 +43,11 @@ const PRESETS: PresetItem[] = [
     id: 'diagonal',
     name: 'Diagonal',
     desc: 'FORWARD + RIGHT',
-    icon: (c, s = 18) => (
-      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2}>
-        <Path d="M5 19 19 5M8 5h11v11" />
+    telemetry: '45° VECTOR',
+    icon: (c, s = 15) => (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M7 17L17 7M10 7h7v7" />
+        <Path d="M4 20l3-3" strokeOpacity={0.6} />
       </Svg>
     ),
   },
@@ -149,9 +55,11 @@ const PRESETS: PresetItem[] = [
     id: 'shuffle',
     name: 'Shuffle',
     desc: 'LEFT ⇄ RIGHT',
-    icon: (c, s = 18) => (
-      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2}>
-        <Path d="M3 8h18m-4-4 4 4-4 4M21 16H3m4-4-4 4 4 4" />
+    telemetry: 'STRAFE ⇄',
+    icon: (c, s = 15) => (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M4 9h16M16 5l4 4-4 4" />
+        <Path d="M20 15H4M8 11l-4 4 4 4" />
       </Svg>
     ),
   },
@@ -159,19 +67,22 @@ const PRESETS: PresetItem[] = [
     id: 'eight',
     name: 'Figure 8',
     desc: 'FLOWING TURNS',
-    icon: (c, s = 18) => (
-      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2}>
-        <Path d="M12 12C-2-2-2 26 12 12S26-2 12 12" />
+    telemetry: 'INFINITY ∞',
+    icon: (c, s = 15) => (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M12 12c-3-3-5.5-3-7 0a4 4 0 0 0 0 6c2.5 3 5 1.5 7-1.5 2 3 4.5 4.5 7 1.5a4 4 0 0 0 0-6c-1.5-3-4-3-7 0z" />
       </Svg>
     ),
   },
   {
     id: 'pivot',
-    name: 'Corner Pivot',
+    name: 'Pivot',
     desc: 'REAR-RIGHT PIVOT',
-    icon: (c, s = 18) => (
-      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2}>
-        <Path d="M5 19V5h14M15 9l4-4-4-3M5 16v6M2 19h6" />
+    telemetry: '90° PIVOT',
+    icon: (c, s = 15) => (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M5 19V6a1 1 0 0 1 1-1h13M15 9l4-4-4-4" />
+        <Path d="M3 19h6M5 16v6" />
       </Svg>
     ),
   },
@@ -179,13 +90,88 @@ const PRESETS: PresetItem[] = [
     id: 'dance',
     name: 'Dance',
     desc: 'SWAY + ROTATE',
-    icon: (c, s = 18) => (
-      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2}>
-        <Path d="m3 7 5-4 4 4 5-4 4 4M3 17l5 4 4-4 5 4 4-4M12 7v10" />
+    telemetry: 'RHYTHM',
+    icon: (c, s = 15) => (
+      <Svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M3 8c3-3 6-3 9 0s6 3 9 0M3 16c3-3 6-3 9 0s6 3 9 0" />
+        <Path d="M12 5v14" strokeDasharray="2,2" strokeOpacity={0.7} />
       </Svg>
     ),
   },
 ];
+
+const PresetButtonCell: React.FC<{
+  item: PresetItem;
+  isFiring: boolean;
+  isBlocked: boolean;
+  onStart: (name: string) => void;
+  onStop: () => void;
+}> = ({ item, isFiring, isBlocked, onStart, onStop }) => {
+  const onStartRef = useRef(onStart);
+  onStartRef.current = onStart;
+  const onStopRef = useRef(onStop);
+  onStopRef.current = onStop;
+
+  const iconColor = isFiring ? '#00f0ff' : isBlocked ? '#4b5563' : '#38bdf8';
+
+  const gesture = useMemo(() => {
+    return Gesture.Pan()
+      .minDistance(0)
+      .minPointers(1)
+      .maxPointers(1)
+      .shouldCancelWhenOutside(false)
+      .runOnJS(true)
+      .enabled(!isBlocked)
+      .onBegin(() => {
+        onStartRef.current(item.id);
+      })
+      .onFinalize(() => {
+        onStopRef.current();
+      });
+  }, [isBlocked, item.id]);
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <View
+        // @ts-ignore
+        style={[
+          styles.buttonCell,
+          isFiring && styles.firingCell,
+          isBlocked && styles.disabledCell,
+          { touchAction: 'none', userSelect: 'none' },
+        ]}>
+        {/* Active Corner Accent */}
+        {isFiring && <View style={styles.cellActiveGlowBar} />}
+
+        {/* Icon */}
+        <View style={styles.cellIconWrapper}>
+          {item.icon(iconColor, 15)}
+        </View>
+
+        {/* Text Details */}
+        <View style={styles.cellTextColumn}>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.cellTitle,
+              isFiring && styles.firingTitle,
+              isBlocked && styles.disabledTitle,
+            ]}>
+            {item.name}
+          </Text>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.cellTelemetry,
+              isFiring && styles.firingTelemetry,
+            ]}>
+            {item.telemetry}
+          </Text>
+        </View>
+      </View>
+    </GestureDetector>
+  );
+};
 
 export const PresetDeck: React.FC<PresetDeckProps> = ({
   currentQuick,
@@ -193,25 +179,49 @@ export const PresetDeck: React.FC<PresetDeckProps> = ({
   onStop,
   disabled = false,
   driveMode,
-  compact = false,
 }) => {
   const isClassic = driveMode === 'classic';
   const isBlocked = disabled || isClassic;
 
-  if (compact) {
-    // Ultra-compact horizontal ribbon for landscape
-    return (
-      <View style={styles.compactRibbonWrapper}>
-        <View style={styles.compactRibbonHeader}>
-          <Text style={styles.compactRibbonTitle}>PRESETS</Text>
-          <Text style={styles.compactRibbonHint}>HOLD TO DRIVE · 80% PWM</Text>
+  // Split presets into 2 fixed rows of 3 buttons each (No scroll!)
+  const topRow = PRESETS.slice(0, 3);
+  const bottomRow = PRESETS.slice(3, 6);
+
+  return (
+    <View style={styles.unifiedDeckWrapper}>
+      {/* HUD Header Bar */}
+      <View style={styles.hudHeader}>
+        <View style={styles.hudTitleGroup}>
+          <View
+            style={[
+              styles.hudBeaconDot,
+              isClassic ? styles.beaconAmber : styles.beaconCyan,
+            ]}
+          />
+          <Text style={styles.hudTitle}>PRESET MANEUVERS</Text>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.compactRibbonContent}>
-          {PRESETS.map((item) => (
-            <CompactPresetButton
+
+        <View
+          style={[
+            styles.hudBadge,
+            isClassic ? styles.hudBadgeAmber : styles.hudBadgeCyan,
+          ]}>
+          <Text
+            style={[
+              styles.hudBadgeText,
+              isClassic ? styles.hudBadgeTextAmber : styles.hudBadgeTextCyan,
+            ]}>
+            {isClassic ? 'MECANUM ONLY' : '80% PWM · HOLD'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Unified 3x2 Matrix (Always in one place, zero scrolling) */}
+      <View style={styles.matrixContainer}>
+        {/* Row 1: Orbit, Diagonal, Shuffle */}
+        <View style={styles.matrixRow}>
+          {topRow.map((item) => (
+            <PresetButtonCell
               key={item.id}
               item={item}
               isFiring={currentQuick?.name === item.id}
@@ -220,162 +230,183 @@ export const PresetDeck: React.FC<PresetDeckProps> = ({
               onStop={onStop}
             />
           ))}
-        </ScrollView>
-      </View>
-    );
-  }
+        </View>
 
-  // Portrait Grid
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>QUICK MOVES</Text>
-        <Text style={styles.hint}>
-          {isClassic ? 'REQUIRES MECANUM MODE' : '80% PWM · HOLD TO MOVE'}
-        </Text>
-      </View>
-
-      {/* Grid */}
-      <View style={styles.grid}>
-        {PRESETS.map((item) => (
-          <GridPresetButton
-            key={item.id}
-            item={item}
-            isFiring={currentQuick?.name === item.id}
-            isBlocked={isBlocked}
-            onStart={onStart}
-            onStop={onStop}
-          />
-        ))}
+        {/* Row 2: Figure 8, Corner Pivot, Dance */}
+        <View style={styles.matrixRow}>
+          {bottomRow.map((item) => (
+            <PresetButtonCell
+              key={item.id}
+              item={item}
+              isFiring={currentQuick?.name === item.id}
+              isBlocked={isBlocked}
+              onStart={onStart}
+              onStop={onStop}
+            />
+          ))}
+        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.05)',
-    backgroundColor: 'rgba(17, 19, 23, 0.4)',
+  unifiedDeckWrapper: {
     width: '100%',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 9,
-    letterSpacing: 1.5,
-    color: '#79818e',
-    fontWeight: '700',
-  },
-  hint: {
-    fontSize: 7,
-    letterSpacing: 1.2,
-    color: '#575f6c',
-    fontWeight: '600',
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  button: {
-    flexBasis: '31%',
-    flexGrow: 1,
-    minHeight: 52,
-    backgroundColor: '#20232a',
+    backgroundColor: 'rgba(13, 16, 22, 0.75)',
     borderWidth: 1,
-    borderColor: '#343943',
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    gap: 8,
+    borderColor: '#1e2430',
+    borderRadius: 9,
+    paddingHorizontal: 6,
+    paddingTop: 5,
+    paddingBottom: 6,
   },
-  pressedBtn: {
-    transform: [{ translateY: 2 }],
-  },
-  firingBtn: {
-    borderColor: '#6ea8ff',
-    backgroundColor: '#263242',
-    shadowColor: '#6ea8ff',
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  disabledBtn: {
-    opacity: 0.35,
-  },
-  iconWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  textCol: {
-    flex: 1,
-  },
-  btnName: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#bdc4cf',
-  },
-  firingText: {
-    color: '#ffffff',
-  },
-  btnDesc: {
-    fontSize: 6,
-    fontFamily: 'monospace',
-    letterSpacing: 0.5,
-    color: '#747e8d',
-    marginTop: 2,
-  },
-
-  /* Compact Ribbon for Landscape */
-  compactRibbonWrapper: {
-    width: '100%',
-    paddingVertical: 2,
-  },
-  compactRibbonHeader: {
+  hudHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginBottom: 2,
-  },
-  compactRibbonTitle: {
-    fontSize: 7,
-    letterSpacing: 1,
-    color: '#79818e',
-    fontWeight: '700',
-  },
-  compactRibbonHint: {
-    fontSize: 6,
-    letterSpacing: 0.8,
-    color: '#575f6c',
-  },
-  compactRibbonContent: {
-    flexDirection: 'row',
-    gap: 6,
+    marginBottom: 4,
     paddingHorizontal: 2,
   },
-  compactRibbonBtn: {
+  hudTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#20232a',
-    borderWidth: 1,
-    borderColor: '#343943',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
   },
-  compactRibbonText: {
+  hudBeaconDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 1,
+  },
+  beaconCyan: {
+    backgroundColor: '#00e5ff',
+    shadowColor: '#00e5ff',
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  beaconAmber: {
+    backgroundColor: '#f59e0b',
+    shadowColor: '#f59e0b',
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  hudTitle: {
+    fontSize: 7.5,
+    letterSpacing: 1.2,
+    color: '#8b97a8',
+    fontWeight: '800',
+  },
+  hudBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  hudBadgeCyan: {
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderColor: 'rgba(0, 229, 255, 0.25)',
+  },
+  hudBadgeAmber: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  hudBadgeText: {
+    fontSize: 6.5,
+    letterSpacing: 0.8,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  hudBadgeTextCyan: {
+    color: '#38bdf8',
+  },
+  hudBadgeTextAmber: {
+    color: '#fbbf24',
+  },
+
+  /* 3x2 Matrix Grid */
+  matrixContainer: {
+    width: '100%',
+    gap: 4,
+  },
+  matrixRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+    width: '100%',
+  },
+
+  /* Individual Button Cell */
+  buttonCell: {
+    flex: 1,
+    height: 32,
+    backgroundColor: '#161a22',
+    borderWidth: 1,
+    borderColor: '#262f3d',
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  cellActiveGlowBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#00f0ff',
+  },
+  firingCell: {
+    backgroundColor: '#0f2438',
+    borderColor: '#00f0ff',
+    shadowColor: '#00f0ff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  disabledCell: {
+    opacity: 0.35,
+    backgroundColor: '#121419',
+    borderColor: '#1c2028',
+  },
+  cellIconWrapper: {
+    width: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  cellTextColumn: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  cellTitle: {
     fontSize: 8.5,
-    fontWeight: '600',
-    color: '#bdc4cf',
+    fontWeight: '700',
+    color: '#d1d8e2',
+    letterSpacing: 0.3,
+  },
+  firingTitle: {
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 240, 255, 0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 4,
+  },
+  disabledTitle: {
+    color: '#555f6d',
+  },
+  cellTelemetry: {
+    fontSize: 5.8,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.4,
+    color: '#657488',
+    marginTop: 0.5,
+  },
+  firingTelemetry: {
+    color: '#38bdf8',
+    fontWeight: '700',
   },
 });
