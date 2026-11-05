@@ -33,12 +33,14 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
   gestureRef,
   simultaneousHandlers,
 }) => {
-  const travel = size * 0.26;
+  const travel = size * 0.28;
   const knobAnimX = useRef(new Animated.Value(0)).current;
   const [engaged, setEngaged] = useState(false);
   const startOffset = useRef<number>(0);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  const knobSize = size * 0.42;
 
   const panGesture = useMemo(() => {
     let g = Gesture.Pan()
@@ -60,10 +62,12 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
       .enabled(!disabled)
       .onBegin((e) => {
         setEngaged(true);
-        // Relative to center of joystick well
-        const dx = e.x - size / 2;
-        startOffset.current = dx;
-        const clampedDx = Math.max(-travel, Math.min(travel, dx));
+        // e.x is relative to the well itself (exact center is size / 2)
+        const rawDx = e.x - size / 2;
+        // If thumb lands on/near the knob, anchor at center for smooth drag without jumping
+        const startX = Math.abs(rawDx) < knobSize * 0.38 ? 0 : rawDx;
+        startOffset.current = startX;
+        const clampedDx = Math.max(-travel, Math.min(travel, startX));
         knobAnimX.setValue(clampedDx);
         onChangeRef.current(clampedDx / travel);
       })
@@ -77,13 +81,13 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
         setEngaged(false);
         Animated.spring(knobAnimX, {
           toValue: 0,
-          friction: 6,
-          tension: 80,
+          friction: 7,
+          tension: 100,
           useNativeDriver: true,
         }).start();
         onChangeRef.current(0);
       });
-  }, [travel, size, disabled, gestureRef, simultaneousHandlers]);
+  }, [travel, size, knobSize, disabled, gestureRef, simultaneousHandlers]);
 
   const isClassic = driveMode === 'classic';
   const displayVal = Math.abs(value);
@@ -91,7 +95,6 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
   if (value > 0) dirText = isClassic ? 'RIGHT' : 'CLOCKWISE';
   else if (value < 0) dirText = isClassic ? 'LEFT' : 'COUNTER-CW';
 
-  const knobSize = size * 0.44;
   const isEngaged = engaged || value !== 0;
 
   return (
@@ -105,20 +108,19 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
         <Text style={styles.axisLabel}>YAW</Text>
       </View>
 
-      {/* Stick Area wrapped in Native GestureDetector */}
-      <GestureDetector gesture={panGesture}>
-        <View
-          // @ts-ignore
-          style={[styles.stickArea, { height: size + (compact ? 14 : 24), touchAction: 'none', userSelect: 'none' }]}>
-          <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>
-            {isClassic ? 'STEER' : 'ROTATE'}
-          </Text>
+      {/* Stick Area */}
+      <View style={[styles.stickArea, { height: size + (compact ? 14 : 24) }]}>
+        <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>
+          {isClassic ? 'STEER' : 'ROTATE'}
+        </Text>
 
+        <GestureDetector gesture={panGesture}>
           <View
-            pointerEvents="none"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            // @ts-ignore
             style={[
               styles.well,
-              { width: size, height: size, borderRadius: size / 2 },
+              { width: size, height: size, borderRadius: size / 2, touchAction: 'none', userSelect: 'none' },
               isEngaged && styles.wellEngagedBlue,
               disabled && styles.disabled,
             ]}>
@@ -151,12 +153,12 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
               </View>
             </Animated.View>
           </View>
+        </GestureDetector>
 
-          <Text style={[styles.directionLabel, styles.dirBottom, compact && styles.compactDir]}>
-            {isClassic ? 'LEFT / RIGHT' : 'CCW / CW'}
-          </Text>
-        </View>
-      </GestureDetector>
+        <Text style={[styles.directionLabel, styles.dirBottom, compact && styles.compactDir]}>
+          {isClassic ? 'LEFT / RIGHT' : 'CCW / CW'}
+        </Text>
+      </View>
 
       {/* Readout */}
       <View style={styles.readout}>
@@ -208,7 +210,7 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
   gestureRef,
   simultaneousHandlers,
 }) => {
-  const travel = size * 0.26;
+  const travel = size * 0.28;
   const knobAnimX = useRef(new Animated.Value(0)).current;
   const knobAnimY = useRef(new Animated.Value(0)).current;
   const [engaged, setEngaged] = useState(false);
@@ -218,6 +220,8 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
   const startOffsetY = useRef<number>(0);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  const knobSize = size * 0.42;
 
   const panGesture = useMemo(() => {
     let g = Gesture.Pan()
@@ -258,11 +262,18 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
       .enabled(!disabled)
       .onBegin((e) => {
         setEngaged(true);
-        const dx = isClassic ? 0 : e.x - size / 2;
-        const dy = size / 2 - e.y;
-        startOffsetX.current = dx;
-        startOffsetY.current = dy;
-        computeAndDispatch(dx, dy);
+        // e.x, e.y are relative to the well itself (exact center is size / 2, size / 2)
+        const rawDx = isClassic ? 0 : e.x - size / 2;
+        const rawDy = size / 2 - e.y;
+        const distFromCenter = Math.hypot(rawDx, rawDy);
+
+        // If thumb lands on/near the knob, anchor at center for smooth drag without jumping
+        const startX = distFromCenter < knobSize * 0.38 ? 0 : rawDx;
+        const startY = distFromCenter < knobSize * 0.38 ? 0 : rawDy;
+
+        startOffsetX.current = startX;
+        startOffsetY.current = startY;
+        computeAndDispatch(startX, startY);
       })
       .onUpdate((e) => {
         const curX = startOffsetX.current + e.translationX;
@@ -274,20 +285,20 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
         Animated.parallel([
           Animated.spring(knobAnimX, {
             toValue: 0,
-            friction: 6,
-            tension: 80,
+            friction: 7,
+            tension: 100,
             useNativeDriver: true,
           }),
           Animated.spring(knobAnimY, {
             toValue: 0,
-            friction: 6,
-            tension: 80,
+            friction: 7,
+            tension: 100,
             useNativeDriver: true,
           }),
         ]).start();
         onChangeRef.current(0, 0);
       });
-  }, [travel, size, isClassic, disabled, gestureRef, simultaneousHandlers]);
+  }, [travel, size, knobSize, isClassic, disabled, gestureRef, simultaneousHandlers]);
 
   const componentMag = Math.round(Math.hypot(throttle, strafe));
   const displayVal = Math.min(80, componentMag);
@@ -300,7 +311,6 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
   else if (strafe < 0) parts.push('LEFT');
   if (parts.length > 0) dirText = parts.join(' · ');
 
-  const knobSize = size * 0.44;
   const isEngaged = engaged || throttle !== 0 || strafe !== 0;
 
   return (
@@ -314,24 +324,23 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
         <Text style={styles.axisLabel}>{isClassic ? 'Y AXIS' : 'X / Y'}</Text>
       </View>
 
-      {/* Stick Area wrapped in Native GestureDetector */}
-      <GestureDetector gesture={panGesture}>
-        <View
-          // @ts-ignore
-          style={[styles.stickArea, { height: size + (compact ? 14 : 24), touchAction: 'none', userSelect: 'none' }]}>
-          <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>FORWARD</Text>
-          {!isClassic && (
-            <>
-              <Text style={[styles.directionLabel, styles.dirLeft, compact && styles.compactDir]}>LEFT</Text>
-              <Text style={[styles.directionLabel, styles.dirRight, compact && styles.compactDir]}>RIGHT</Text>
-            </>
-          )}
+      {/* Stick Area */}
+      <View style={[styles.stickArea, { height: size + (compact ? 14 : 24) }]}>
+        <Text style={[styles.directionLabel, styles.dirTop, compact && styles.compactDir]}>FORWARD</Text>
+        {!isClassic && (
+          <>
+            <Text style={[styles.directionLabel, styles.dirLeft, compact && styles.compactDir]}>LEFT</Text>
+            <Text style={[styles.directionLabel, styles.dirRight, compact && styles.compactDir]}>RIGHT</Text>
+          </>
+        )}
 
+        <GestureDetector gesture={panGesture}>
           <View
-            pointerEvents="none"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            // @ts-ignore
             style={[
               styles.well,
-              { width: size, height: size, borderRadius: size / 2 },
+              { width: size, height: size, borderRadius: size / 2, touchAction: 'none', userSelect: 'none' },
               isEngaged && styles.wellEngagedOrange,
               disabled && styles.disabled,
             ]}>
@@ -375,10 +384,10 @@ export const MovementJoystick: React.FC<MovementJoystickProps> = ({
               </View>
             </Animated.View>
           </View>
+        </GestureDetector>
 
-          <Text style={[styles.directionLabel, styles.dirBottom, compact && styles.compactDir]}>REVERSE</Text>
-        </View>
-      </GestureDetector>
+        <Text style={[styles.directionLabel, styles.dirBottom, compact && styles.compactDir]}>REVERSE</Text>
+      </View>
 
       {/* Readout */}
       <View style={styles.readout}>

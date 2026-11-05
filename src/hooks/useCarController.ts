@@ -308,6 +308,9 @@ export function useCarController() {
         newX = length ? signedRound((l / length) * strength) : 0;
       }
 
+      // Skip redundant React state dispatches if integer PWM values are identical
+      if (newT === throttleRef.current && newX === strafeRef.current) return;
+
       throttleRef.current = newT;
       strafeRef.current = newX;
       setThrottle(newT);
@@ -323,6 +326,10 @@ export function useCarController() {
       if (!connected || maintenance || quickRef.current) return;
       const clamped = Math.max(-1, Math.min(1, yaw));
       const s = magnitude(clamped);
+
+      // Skip redundant React state dispatches if integer PWM value is identical
+      if (s === steeringRef.current) return;
+
       steeringRef.current = s;
       setSteering(s);
       sendTransportUpdate(actionRef.current, quickRef.current, throttleRef.current, strafeRef.current, s);
