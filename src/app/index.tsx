@@ -24,6 +24,7 @@ import { CockpitSplashOverlay } from '@/components/CockpitSplashOverlay';
 export default function RemoteScreen() {
   const {
     connected,
+    probing,
     isLiveMode,
     setIsLiveMode,
     serverUrl,
@@ -119,6 +120,8 @@ export default function RemoteScreen() {
         {/* Top Navigation Bar */}
         <TopBar
           connected={connected}
+          probing={probing}
+          isLiveMode={isLiveMode}
           onToggleConnection={toggleConnection}
           onOpenFirmware={() => setFirmwareModalOpen(true)}
           onOpenSettings={() => setSettingsModalOpen(true)}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SuperCarLink, CarCommand } from '@/services/transport';
 import { AppStorage } from '@/services/storage';
@@ -81,6 +82,7 @@ export function useCarController() {
   const [isLiveMode, setIsLiveMode] = useState<boolean>(true);
   const [serverUrl, setServerUrl] = useState<string>('http://192.168.4.1');
   const [connected, setConnected] = useState<boolean>(false);
+  const [probing, setProbing] = useState<boolean>(true);
   const [driveMode, setDriveMode] = useState<DriveMode>('mecanum');
   const [throttle, setThrottle] = useState<number>(0);
   const [strafe, setStrafe] = useState<number>(0);
@@ -196,24 +198,29 @@ export function useCarController() {
     [announce, isLiveMode]
   );
 
-  // Switch Live / Demo Mode
+  // Switch Live / Demo Mode and manage transport
   useEffect(() => {
     if (isLiveMode) {
       setConnected(false);
-      announce('Connecting to Super Car…');
-      const link = new SuperCarLink((conn, motors, err) => {
+      setProbing(true);
+      announce('Scanning for Super Car (192.168.4.1)…');
+
+      const link = new SuperCarLink((conn, motors, err, isProbing) => {
         setActualOutputs(motors);
+        setProbing(!!isProbing);
         setConnected((wasConn) => {
           if (!conn) {
             stopAll();
-            if (wasConn || err) {
+            if (wasConn) {
+              triggerHaptic('heavy');
               announce(
                 err === 'another controller is active'
                   ? 'Another controller tab is active. Close it to take control.'
-                  : 'Connection lost · Failsafe neutral engaged.'
+                  : 'Connection lost · Auto-reconnecting…'
               );
             }
           } else if (!wasConn) {
+            triggerHaptic('medium');
             announce('Connected to Super Car. Controls ready.');
           }
           return conn;
@@ -235,10 +242,32 @@ export function useCarController() {
         linkRef.current = null;
       }
       setConnected(true);
+      setProbing(false);
       setActualOutputs([0, 0, 0, 0]);
       announce('Interactive demo mode active. Ready to drive.');
     }
-  }, [isLiveMode, serverUrl, announce, stopAll]);
+  }, [isLiveMode, serverUrl, announce, stopAll, triggerHaptic]);
+
+  // App lifecycle listener (resumes auto-probing on foreground, neutralizes on background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        if (linkRef.current && isLiveMode) {
+          linkRef.current.wake();
+          if (!linkRef.current.isConnected()) {
+            setProbing(true);
+            announce('Resumed: Scanning for Super Car…');
+          }
+        }
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        stopAll('App in background · Controls neutral.');
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isLiveMode, stopAll, announce]);
 
   // Handle Maintenance state changes
   useEffect(() => {
@@ -251,14 +280,15 @@ export function useCarController() {
   }, [maintenance, stopAll]);
 
   const toggleConnection = useCallback(() => {
+    triggerHaptic('light');
     if (isLiveMode) {
       if (connected) {
-        announce('Connected to Super Car. Command readouts show live PWM.');
+        announce(`Connected to Super Car (${serverUrl}). Live telemetry active.`);
       } else {
-        announce('Connecting to Super Car (192.168.4.1)…');
+        setProbing(true);
+        announce(`Searching for Super Car (${serverUrl})…`);
         if (linkRef.current) {
-          linkRef.current.setActive(true);
-          linkRef.current.send();
+          linkRef.current.probeNow();
         }
       }
     } else {
@@ -269,7 +299,7 @@ export function useCarController() {
         return next;
       });
     }
-  }, [isLiveMode, connected, announce, stopAll]);
+  }, [isLiveMode, connected, serverUrl, announce, stopAll, triggerHaptic]);
 
   const toggleDriveMode = useCallback(() => {
     if (!connected || maintenance) return;
@@ -505,6 +535,7 @@ export function useCarController() {
 
   return {
     connected,
+    probing,
     isLiveMode,
     setIsLiveMode: updateIsLiveMode,
     serverUrl,

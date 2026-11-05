@@ -1,9 +1,11 @@
-import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
+import React, { useEffect, useRef } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 interface TopBarProps {
   connected: boolean;
+  probing?: boolean;
+  isLiveMode?: boolean;
   onToggleConnection: () => void;
   onOpenFirmware: () => void;
   onOpenSettings: () => void;
@@ -12,11 +14,80 @@ interface TopBarProps {
 
 export const TopBar: React.FC<TopBarProps> = ({
   connected,
+  probing = false,
+  isLiveMode = true,
   onToggleConnection,
   onOpenFirmware,
   onOpenSettings,
   compact = true,
 }) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // Active radar breathing animation while probing/searching for ESP32 connection
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | null = null;
+    if (!connected && probing) {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.25,
+            duration: 650,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 650,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+
+    return () => {
+      if (loop) loop.stop();
+    };
+  }, [connected, probing, pulseAnim]);
+
+  // Determine visual style according to connection & probing state
+  const isSearching = !connected && probing;
+  const isDemo = !isLiveMode && connected;
+
+  let pillStyle = styles.pillConnected;
+  let dotStyle = styles.dotConnected;
+  let textStyle = styles.textConnected;
+  let strokeColor = '#80e0b0';
+  let statusText = 'LINK ACTIVE';
+
+  if (isDemo) {
+    pillStyle = styles.pillDemo;
+    dotStyle = styles.dotDemo;
+    textStyle = styles.textDemo;
+    strokeColor = '#b388ff';
+    statusText = 'DEMO ACTIVE';
+  } else if (connected) {
+    pillStyle = styles.pillConnected;
+    dotStyle = styles.dotConnected;
+    textStyle = styles.textConnected;
+    strokeColor = '#80e0b0';
+    statusText = 'LINK ACTIVE';
+  } else if (isSearching) {
+    pillStyle = styles.pillSearching;
+    dotStyle = styles.dotSearching;
+    textStyle = styles.textSearching;
+    strokeColor = '#fbbf24';
+    statusText = 'SEARCHING ᯤ';
+  } else {
+    pillStyle = styles.pillDisconnected;
+    dotStyle = styles.dotDisconnected;
+    textStyle = styles.textDisconnected;
+    strokeColor = '#e68c83';
+    statusText = 'RECONNECT ↻';
+  }
+
   return (
     <View style={[styles.topbar, compact && styles.compactTopbar]}>
       {/* Brand & Cockpit Badge */}
@@ -43,26 +114,40 @@ export const TopBar: React.FC<TopBarProps> = ({
         </View>
       </View>
 
-      {/* Connection Pill */}
+      {/* Dynamic Cockpit Connection Pill (Continuous Probe & Auto-Reconnect) */}
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={onToggleConnection}
         style={[
           styles.connectionPill,
           compact && styles.compactConnectionPill,
-          !connected && styles.pillDisconnected,
+          pillStyle,
         ]}>
-        <View style={[styles.statusDot, !connected && styles.dotDisconnected]} />
+        <Animated.View
+          style={[
+            styles.statusDot,
+            dotStyle,
+            isSearching && { opacity: pulseAnim },
+          ]}
+        />
         <Text
           numberOfLines={1}
           adjustsFontSizeToFit
-          minimumFontScale={0.8}
-          style={[styles.connectionText, compact && styles.compactConnectionText, !connected && styles.textDisconnected]}>
-          {connected ? 'LINK ACTIVE' : 'DISCONNECTED'}
+          minimumFontScale={0.75}
+          style={[styles.connectionText, compact && styles.compactConnectionText, textStyle]}>
+          {statusText}
         </Text>
-        <Svg width={compact ? 13 : 15} height={compact ? 13 : 15} viewBox="0 0 24 24" fill="none" stroke={connected ? '#80e0b0' : '#e68c83'} strokeWidth={2.2}>
-          <Path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0M12 20h.01" />
-        </Svg>
+        <Animated.View style={isSearching ? { opacity: pulseAnim } : undefined}>
+          <Svg
+            width={compact ? 13 : 15}
+            height={compact ? 13 : 15}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={2.2}>
+            <Path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0M12 20h.01" />
+          </Svg>
+        </Animated.View>
       </TouchableOpacity>
 
       {/* Tools */}
@@ -187,9 +272,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 14,
-    backgroundColor: 'rgba(128, 224, 176, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(128, 224, 176, 0.35)',
   },
   compactConnectionPill: {
     paddingHorizontal: 8,
@@ -199,31 +282,67 @@ const styles = StyleSheet.create({
   compactConnectionText: {
     fontSize: 7.5,
   },
+  pillConnected: {
+    backgroundColor: 'rgba(128, 224, 176, 0.08)',
+    borderColor: 'rgba(128, 224, 176, 0.35)',
+  },
+  pillSearching: {
+    backgroundColor: 'rgba(251, 191, 36, 0.12)',
+    borderColor: 'rgba(251, 191, 36, 0.45)',
+  },
   pillDisconnected: {
-    backgroundColor: 'rgba(230, 140, 131, 0.07)',
-    borderColor: 'rgba(230, 140, 131, 0.3)',
+    backgroundColor: 'rgba(230, 140, 131, 0.08)',
+    borderColor: 'rgba(230, 140, 131, 0.35)',
+  },
+  pillDemo: {
+    backgroundColor: 'rgba(179, 136, 255, 0.10)',
+    borderColor: 'rgba(179, 136, 255, 0.35)',
   },
   statusDot: {
     width: 5.5,
     height: 5.5,
     borderRadius: 2.75,
+  },
+  dotConnected: {
     backgroundColor: '#80e0b0',
     shadowColor: '#80e0b0',
     shadowOpacity: 0.8,
     shadowRadius: 4,
   },
+  dotSearching: {
+    backgroundColor: '#fbbf24',
+    shadowColor: '#fbbf24',
+    shadowOpacity: 0.9,
+    shadowRadius: 4,
+  },
   dotDisconnected: {
     backgroundColor: '#e68c83',
     shadowColor: '#e68c83',
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  dotDemo: {
+    backgroundColor: '#b388ff',
+    shadowColor: '#b388ff',
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
   },
   connectionText: {
     fontSize: 8,
     letterSpacing: 0.8,
-    color: '#9deac2',
     fontWeight: '800',
+  },
+  textConnected: {
+    color: '#9deac2',
+  },
+  textSearching: {
+    color: '#fde68a',
   },
   textDisconnected: {
     color: '#f09b93',
+  },
+  textDemo: {
+    color: '#d1b3ff',
   },
   tools: {
     flexDirection: 'row',

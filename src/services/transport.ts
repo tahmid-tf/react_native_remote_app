@@ -1,6 +1,6 @@
 /**
- * SuperCarLink - Transport manager for ESP32 Car Remote
- * Handles serialized command transmission to the ESP32 /api/control endpoint.
+ * SuperCarLink - Robust transport & connection manager for ESP32 Car Remote
+ * Handles continuous connection probing, auto-reconnection, and serialized command transmission.
  */
 
 export interface CarCommand {
@@ -22,7 +22,8 @@ export interface MotorFeedback {
 export type StatusCallback = (
   connected: boolean,
   motors: [number, number, number, number],
-  error?: string
+  error?: string,
+  probing?: boolean
 ) => void;
 
 function generateClientId(): string {
@@ -39,12 +40,14 @@ export class SuperCarLink {
   private client: string;
   private seq: number;
   private connected: boolean;
+  private probing: boolean;
   private active: boolean;
-  private epoch: number;
   private latest: CarCommand;
   private lastSentAt: number;
+  private lastFlightStart: number;
   private inFlight: boolean;
-  private timer: any;
+  private driveTimer: any;
+  private probeTimer: any;
   private abortController: AbortController | null;
   private baseUrl: string;
   private consecutiveErrors: number;
@@ -55,18 +58,25 @@ export class SuperCarLink {
     this.client = generateClientId();
     this.seq = 0;
     this.connected = false;
+    this.probing = false;
     this.active = true;
-    this.epoch = 0;
     this.latest = this.neutral();
     this.lastSentAt = -Infinity;
+    this.lastFlightStart = 0;
     this.inFlight = false;
-    this.timer = null;
+    this.driveTimer = null;
+    this.probeTimer = null;
     this.abortController = null;
     this.consecutiveErrors = 0;
   }
 
   setBaseUrl(url: string) {
-    this.baseUrl = url.replace(/\/+$/, '');
+    const clean = url.replace(/\/+$/, '');
+    if (this.baseUrl === clean) return;
+    this.baseUrl = clean;
+    if (this.active && !this.connected) {
+      this.probeNow();
+    }
   }
 
   getBaseUrl(): string {
@@ -81,26 +91,117 @@ export class SuperCarLink {
     return this.connected;
   }
 
+  isProbing(): boolean {
+    return this.probing;
+  }
+
   neutral(): CarCommand {
     return { mode: 'drive', t: 0, x: 0, s: 0, id: 0 };
   }
 
   start() {
-    this.stop();
-    this.timer = setInterval(() => this.send(), 50);
-    this.send();
+    this.active = true;
+    if (this.connected) {
+      this.startDriveLoop();
+    } else {
+      this.startProbeLoop();
+    }
   }
 
   stop() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+    this.stopDriveLoop();
+    this.stopProbeLoop();
+    if (this.abortController) {
+      try {
+        this.abortController.abort();
+      } catch {}
+      this.abortController = null;
+    }
+    this.inFlight = false;
+  }
+
+  private startDriveLoop() {
+    this.stopProbeLoop();
+    this.stopDriveLoop();
+    this.driveTimer = setInterval(() => this.send(), 50);
+    this.send();
+  }
+
+  private stopDriveLoop() {
+    if (this.driveTimer) {
+      clearInterval(this.driveTimer);
+      this.driveTimer = null;
+    }
+  }
+
+  private startProbeLoop() {
+    this.stopDriveLoop();
+    this.stopProbeLoop();
+    if (!this.active || this.connected) return;
+
+    this.probing = true;
+    this.onStatus(false, [0, 0, 0, 0], undefined, true);
+
+    this.probeTimer = setInterval(() => {
+      this.probe();
+    }, 1200);
+
+    // Trigger immediate probe
+    this.probe();
+  }
+
+  private stopProbeLoop() {
+    if (this.probeTimer) {
+      clearInterval(this.probeTimer);
+      this.probeTimer = null;
+    }
+    this.probing = false;
+  }
+
+  /**
+   * Forcibly triggers an immediate probe, clearing any stuck in-flight request.
+   */
+  async probeNow(): Promise<boolean> {
+    if (!this.active) return false;
+    if (this.abortController) {
+      try {
+        this.abortController.abort();
+      } catch {}
+      this.abortController = null;
+    }
+    this.inFlight = false;
+    return this.probe();
+  }
+
+  /**
+   * Resumes link execution when app comes to foreground or network changes.
+   */
+  wake() {
+    if (!this.active) {
+      this.start();
+      return;
+    }
+    // Clean up any stale in-flight state from backgrounding
+    if (this.abortController) {
+      try {
+        this.abortController.abort();
+      } catch {}
+      this.abortController = null;
+    }
+    this.inFlight = false;
+
+    if (this.connected) {
+      this.send();
+    } else {
+      this.startProbeLoop();
     }
   }
 
   update(command: CarCommand) {
     const changed = JSON.stringify(command) !== JSON.stringify(this.latest);
     this.latest = { ...command };
+    if (!this.connected || !this.active) return;
+
     const immediate =
       command.mode !== 'drive' || (!command.t && !command.x && !command.s);
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
@@ -109,11 +210,31 @@ export class SuperCarLink {
     }
   }
 
+  /**
+   * High-speed 50ms command transmission loop used while connected.
+   */
   async send() {
-    if (!this.active || this.inFlight) return;
+    if (!this.active || !this.connected) return;
+
+    // Guard against hung in-flight request (> 1500ms)
+    const now = Date.now();
+    if (this.inFlight) {
+      if (now - this.lastFlightStart > 1500) {
+        if (this.abortController) {
+          try {
+            this.abortController.abort();
+          } catch {}
+          this.abortController = null;
+        }
+        this.inFlight = false;
+      } else {
+        return;
+      }
+    }
+
     this.inFlight = true;
-    const epoch = this.epoch;
-    const command = this.connected ? this.latest : this.neutral();
+    this.lastFlightStart = Date.now();
+    const command = this.latest;
 
     const params = new URLSearchParams();
     params.append('client', this.client);
@@ -138,6 +259,7 @@ export class SuperCarLink {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
         },
         body: params.toString(),
         signal: abort.signal,
@@ -163,49 +285,134 @@ export class SuperCarLink {
         throw new Error(data.error || `Invalid controller response (HTTP ${response.status})`);
       }
 
-      if (epoch !== this.epoch) return;
+      clearTimeout(timeout);
       this.consecutiveErrors = 0;
       this.connected = true;
-      this.onStatus(true, data.motors);
+      this.probing = false;
+      this.onStatus(true, data.motors, undefined, false);
     } catch (error: any) {
-      if (epoch !== this.epoch) return;
-      if (error?.name === 'AbortError') return;
-
+      clearTimeout(timeout);
       this.consecutiveErrors++;
-      // Only transition to disconnected after 3 consecutive failures to absorb Wi-Fi jitter
-      if (this.consecutiveErrors >= 3 || !this.connected) {
+      // If 3 consecutive failures occur, drop connection and initiate auto-probe
+      if (this.consecutiveErrors >= 3) {
         this.connected = false;
         this.latest = this.neutral();
-        this.onStatus(false, [0, 0, 0, 0], error?.message || 'Connection error');
+        this.stopDriveLoop();
+        this.onStatus(false, [0, 0, 0, 0], error?.message || 'Connection lost', true);
+        this.startProbeLoop();
       }
     } finally {
       clearTimeout(timeout);
-      if (epoch === this.epoch) {
-        this.inFlight = false;
-        // If a new command arrived while this request was in flight, dispatch it immediately
-        if (JSON.stringify(this.latest) !== JSON.stringify(command)) {
-          this.send();
-        }
+      this.inFlight = false;
+      // If a new command arrived while this request was in flight, dispatch it immediately
+      if (this.connected && JSON.stringify(this.latest) !== JSON.stringify(command)) {
+        this.send();
       }
+    }
+  }
+
+  /**
+   * Lightweight connection probe sent periodically when disconnected.
+   * Auto-reconnects as soon as the ESP32 becomes reachable.
+   */
+  async probe(): Promise<boolean> {
+    if (!this.active || this.connected) return false;
+
+    // Guard against hung in-flight requests (> 2000ms)
+    const now = Date.now();
+    if (this.inFlight) {
+      if (now - this.lastFlightStart > 2000) {
+        if (this.abortController) {
+          try {
+            this.abortController.abort();
+          } catch {}
+          this.abortController = null;
+        }
+        this.inFlight = false;
+      } else {
+        return false;
+      }
+    }
+
+    this.inFlight = true;
+    this.lastFlightStart = Date.now();
+    this.probing = true;
+    this.onStatus(false, [0, 0, 0, 0], undefined, true);
+
+    const abort = new AbortController();
+    this.abortController = abort;
+    const timeout = setTimeout(() => abort.abort(), 1100);
+
+    const params = new URLSearchParams();
+    params.append('client', this.client);
+    params.append('seq', String(++this.seq));
+    params.append('mode', 'drive');
+    params.append('t', '0');
+    params.append('x', '0');
+    params.append('s', '0');
+    params.append('id', '0');
+
+    try {
+      const response = await fetch(`${this.baseUrl}/api/control`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+        },
+        body: params.toString(),
+        signal: abort.signal,
+      });
+
+      const text = await response.text();
+      let data: MotorFeedback;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`Controller returned invalid JSON (HTTP ${response.status})`);
+      }
+
+      if (
+        !response.ok ||
+        !data.ok ||
+        !Array.isArray(data.motors) ||
+        data.motors.length !== 4
+      ) {
+        throw new Error(data.error || `Invalid controller response (HTTP ${response.status})`);
+      }
+
+      // Probing SUCCESS: Car responded!
+      clearTimeout(timeout);
+      this.inFlight = false;
+      this.consecutiveErrors = 0;
+      this.connected = true;
+      this.probing = false;
+      this.stopProbeLoop();
+      this.onStatus(true, data.motors, undefined, false);
+      this.startDriveLoop();
+      return true;
+    } catch (error: any) {
+      clearTimeout(timeout);
+      this.inFlight = false;
+      this.connected = false;
+      this.probing = true;
+      this.onStatus(false, [0, 0, 0, 0], error?.message || 'Searching...', true);
+      return false;
     }
   }
 
   setActive(active: boolean) {
     if (this.active === active) return;
     this.active = active;
-    this.epoch++;
-    if (this.abortController) {
-      try {
-        this.abortController.abort();
-      } catch {}
-    }
-    this.inFlight = false;
-    this.consecutiveErrors = 0;
-    this.latest = this.neutral();
-    this.connected = false;
+    this.stop();
 
     if (!active) {
-      // Fire stop command
+      this.consecutiveErrors = 0;
+      this.latest = this.neutral();
+      this.connected = false;
+      this.probing = false;
+
+      // Best-effort neutral stop packet
       try {
         const params = new URLSearchParams();
         params.append('client', this.client);
@@ -221,11 +428,10 @@ export class SuperCarLink {
           body: params.toString(),
         }).catch(() => {});
       } catch {}
-    }
 
-    this.onStatus(false, [0, 0, 0, 0]);
-    if (active) {
-      this.send();
+      this.onStatus(false, [0, 0, 0, 0], undefined, false);
+    } else {
+      this.start();
     }
   }
 }

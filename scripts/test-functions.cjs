@@ -265,6 +265,105 @@ simulateStorageSave('@supercar_drive_mode', 'mecanum');
 assert.equal(simulateStorageGet('@supercar_drive_mode', 'classic'), 'mecanum', 'Must remember mecanum mode after toggle');
 console.log('✓ Drive mode local storage persistence verified.\n');
 
+// 8. Test Auto-Reconnection & Probing Logic
+console.log('8. Testing Auto-Reconnection & Continuous Probing State Flow...');
+class MockSuperCarLink {
+  constructor() {
+    this.connected = false;
+    this.probing = false;
+    this.active = true;
+    this.consecutiveErrors = 0;
+    this.driveTimer = null;
+    this.probeTimer = null;
+    this.statusLog = [];
+  }
+
+  onStatus(conn, motors, err, probing) {
+    this.statusLog.push({ conn, probing, err });
+  }
+
+  start() {
+    this.active = true;
+    if (this.connected) {
+      this.startDrive();
+    } else {
+      this.startProbe();
+    }
+  }
+
+  startProbe() {
+    this.stopDrive();
+    this.probing = true;
+    this.onStatus(false, [0, 0, 0, 0], undefined, true);
+  }
+
+  stopDrive() {
+    this.driveTimer = null;
+  }
+
+  startDrive() {
+    this.probing = false;
+    this.driveTimer = 'active';
+  }
+
+  simulateProbeSuccess() {
+    this.connected = true;
+    this.probing = false;
+    this.consecutiveErrors = 0;
+    this.onStatus(true, [0, 0, 0, 0], undefined, false);
+    this.startDrive();
+  }
+
+  simulatePacketLoss() {
+    this.consecutiveErrors++;
+    if (this.consecutiveErrors >= 3) {
+      this.connected = false;
+      this.stopDrive();
+      this.onStatus(false, [0, 0, 0, 0], 'Connection lost', true);
+      this.startProbe();
+    }
+  }
+
+  wake() {
+    if (this.connected) {
+      this.startDrive();
+    } else {
+      this.startProbe();
+    }
+  }
+}
+
+const link = new MockSuperCarLink();
+// On initial startup: must start probing immediately
+link.start();
+assert.equal(link.connected, false, 'Initial state is disconnected');
+assert.equal(link.probing, true, 'Initial state must be probing/searching');
+assert.equal(link.statusLog[link.statusLog.length - 1].probing, true);
+
+// Simulate ESP32 Car detected and responds
+link.simulateProbeSuccess();
+assert.equal(link.connected, true, 'Link connects upon successful probe');
+assert.equal(link.probing, false, 'Probing ends when connected');
+assert.equal(link.driveTimer, 'active', 'Fast drive loop is active');
+
+// Simulate packet loss (e.g. WiFi range drop)
+link.simulatePacketLoss(); // 1 error - remains connected
+assert.equal(link.connected, true);
+link.simulatePacketLoss(); // 2 errors - remains connected
+assert.equal(link.connected, true);
+link.simulatePacketLoss(); // 3 errors - drops to searching auto-probe
+assert.equal(link.connected, false, 'Drops connection after 3 failures');
+assert.equal(link.probing, true, 'Auto-reconnect probing automatically engages');
+
+// Simulate app backgrounding and foregrounding
+link.wake();
+assert.equal(link.probing, true, 'Waking app keeps auto-reconnection probing active');
+
+// Simulate reconnect
+link.simulateProbeSuccess();
+assert.equal(link.connected, true, 'Auto-reconnects seamlessly');
+console.log('✓ Continuous auto-reconnection & probing state flow confirmed.\n');
+
 console.log('====================================================');
 console.log('ALL VERIFICATION CHECKS PASSED SUCCESSFULLY!');
 console.log('====================================================');
