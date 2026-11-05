@@ -25,7 +25,8 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
-        "CHANGE_NETWORK_STATE"
+        "CHANGE_NETWORK_STATE",
+        "CHANGE_WIFI_MULTICAST_STATE"
       ]
     },
     "web": {
@@ -42,7 +43,8 @@
           "imageWidth": 320,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "./plugins/withCleartextTraffic"
     ],
     "experiments": {
       "typedRoutes": true,
