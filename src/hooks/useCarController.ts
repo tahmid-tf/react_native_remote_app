@@ -210,7 +210,7 @@ export function useCarController() {
               announce(
                 err === 'another controller is active'
                   ? 'Another controller tab is active. Close it to take control.'
-                  : 'Connection lost. Motors stop automatically; reconnecting at neutral.'
+                  : 'Connection lost · Failsafe neutral engaged.'
               );
             }
           } else if (!wasConn) {
@@ -468,12 +468,10 @@ export function useCarController() {
 
   const isMoving = motorOutputs.some((v) => v !== 0);
 
-  // Derive Drive State Text
+  // Derive Drive State Text (Motor & maneuver telemetry only; connection state handled in TopBar)
   let driveStateText = 'STANDBY';
   if (maintenance) {
-    driveStateText = 'CONTROLS PAUSED';
-  } else if (!connected) {
-    driveStateText = 'NO CONNECTION';
+    driveStateText = 'PAUSED';
   } else if (action) {
     driveStateText = action.name === 'burnout' ? 'BURNOUT' : 'NITRO BOOST';
   } else if (quick) {

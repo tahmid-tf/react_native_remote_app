@@ -148,25 +148,33 @@ export default function RemoteScreen() {
             {/* Drive status bar & Mode Switch */}
             <View style={styles.landscapeCenterHead}>
               <View style={styles.driveControlTag}>
-                <View style={styles.tinySquare} />
+                <View
+                  style={[
+                    styles.tinySquare,
+                    connected ? styles.tinySquareConnected : styles.tinySquareDisconnected,
+                  ]}
+                />
                 <Text style={styles.consoleTitle}>DRIVE CONTROL</Text>
-                <View style={styles.driveStatePill}>
-                  <Text
-                    style={[
-                      styles.driveStateText,
-                      driveStateText !== 'STANDBY' && styles.driveStateActive,
-                    ]}>
-                    {driveStateText}
-                  </Text>
-                </View>
+                {connected && driveStateText !== 'STANDBY' && (
+                  <View style={styles.driveStatePill}>
+                    <Text style={styles.driveStateActive}>{driveStateText}</Text>
+                  </View>
+                )}
               </View>
 
               <TouchableOpacity
                 activeOpacity={0.75}
                 disabled={maintenance || !connected}
                 onPress={toggleDriveMode}
-                style={styles.modeBtnCompact}>
-                <Text style={styles.modeBtnText}>
+                style={[
+                  styles.modeBtnCompact,
+                  (!connected || maintenance) && styles.modeBtnDisabled,
+                ]}>
+                <Text
+                  style={[
+                    styles.modeBtnText,
+                    (!connected || maintenance) && styles.modeBtnTextDisabled,
+                  ]}>
                   {isClassic ? 'Classic ⇄' : 'Mecanum ⇄'}
                 </Text>
               </TouchableOpacity>
@@ -287,8 +295,16 @@ const styles = StyleSheet.create({
   tinySquare: {
     width: 5,
     height: 5,
-    backgroundColor: '#ff684b',
     borderRadius: 1,
+  },
+  tinySquareConnected: {
+    backgroundColor: '#00e5ff',
+    shadowColor: '#00e5ff',
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+  },
+  tinySquareDisconnected: {
+    backgroundColor: '#4b5563',
   },
   consoleTitle: {
     fontSize: 8,
@@ -297,17 +313,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   driveStatePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  driveStateText: {
-    fontSize: 8,
-    letterSpacing: 1.5,
-    color: '#81868f',
-    fontWeight: '700',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.25)',
   },
   driveStateActive: {
-    color: '#ff684b',
+    fontSize: 7,
+    letterSpacing: 1,
+    color: '#00e5ff',
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
   /* ======================================= */
@@ -366,10 +384,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
+  modeBtnDisabled: {
+    borderColor: '#262d3a',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    opacity: 0.5,
+  },
   modeBtnText: {
     fontSize: 8,
     color: '#afcdf7',
     fontWeight: '700',
+  },
+  modeBtnTextDisabled: {
+    color: '#64748b',
   },
   carStageWrapper: {
     marginVertical: 2,
