@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,89 +6,79 @@ import {
   Image,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, usePanGesture, type PanGesture } from 'react-native-gesture-handler';
 import { ActionState, ActionType } from '@/hooks/useCarController';
+
+interface ActionButtonControl {
+  gesture: PanGesture;
+  pressed: boolean;
+}
+
+export interface ActionDeckControls {
+  burnout: ActionButtonControl;
+  nitro: ActionButtonControl;
+}
+
+interface ActionDeckGestureOptions {
+  onTrigger: (type: ActionType) => void;
+  disabled: boolean;
+  /**
+   * Gestures created earlier (in render order) that may run at the same time
+   * as the action buttons. RNGH makes the relation symmetric. Burnout and
+   * nitro are deliberately not simultaneous with each other.
+   */
+  simultaneousWith?: PanGesture[];
+}
+
+function useActionButton(
+  type: ActionType,
+  { onTrigger, disabled, simultaneousWith }: ActionDeckGestureOptions
+): ActionButtonControl {
+  const [pressed, setPressed] = useState(false);
+
+  const gesture = usePanGesture({
+    minDistance: 0,
+    minPointers: 1,
+    maxPointers: 1,
+    shouldCancelWhenOutside: false,
+    runOnJS: true,
+    enabled: !disabled,
+    simultaneousWith,
+    onBegin: () => {
+      setPressed(true);
+      onTrigger(type);
+    },
+    onFinalize: () => {
+      setPressed(false);
+    },
+  });
+
+  return { gesture, pressed };
+}
+
+export function useActionDeck(options: ActionDeckGestureOptions): ActionDeckControls {
+  const burnout = useActionButton('burnout', options);
+  const nitro = useActionButton('nitro', options);
+  return { burnout, nitro };
+}
 
 interface ActionDeckProps {
   action: ActionState | null;
-  onTrigger: (type: ActionType) => void;
+  controls: ActionDeckControls;
   disabled?: boolean;
   compact?: boolean;
-  burnoutGestureRef?: React.MutableRefObject<any>;
-  nitroGestureRef?: React.MutableRefObject<any>;
-  simultaneousHandlers?: React.MutableRefObject<any>[];
 }
 
 export const ActionDeck: React.FC<ActionDeckProps> = ({
   action,
-  onTrigger,
+  controls,
   disabled = false,
   compact = false,
-  burnoutGestureRef,
-  nitroGestureRef,
-  simultaneousHandlers,
 }) => {
   const isBurnoutActive = action?.name === 'burnout';
   const isNitroActive = action?.name === 'nitro';
-  const [pressedBurnout, setPressedBurnout] = useState(false);
-  const [pressedNitro, setPressedNitro] = useState(false);
-
-  const onTriggerRef = useRef(onTrigger);
-  onTriggerRef.current = onTrigger;
-
-  const burnoutGesture = useMemo(() => {
-    let g = Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true);
-
-    if (burnoutGestureRef) {
-      g = g.withRef(burnoutGestureRef);
-    }
-
-    if (simultaneousHandlers && simultaneousHandlers.length > 0) {
-      g = g.simultaneousWithExternalGesture(...simultaneousHandlers);
-    }
-
-    return g
-      .enabled(!disabled)
-      .onBegin(() => {
-        setPressedBurnout(true);
-        onTriggerRef.current('burnout');
-      })
-      .onFinalize(() => {
-        setPressedBurnout(false);
-      });
-  }, [disabled, burnoutGestureRef, simultaneousHandlers]);
-
-  const nitroGesture = useMemo(() => {
-    let g = Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true);
-
-    if (nitroGestureRef) {
-      g = g.withRef(nitroGestureRef);
-    }
-
-    if (simultaneousHandlers && simultaneousHandlers.length > 0) {
-      g = g.simultaneousWithExternalGesture(...simultaneousHandlers);
-    }
-
-    return g
-      .enabled(!disabled)
-      .onBegin(() => {
-        setPressedNitro(true);
-        onTriggerRef.current('nitro');
-      })
-      .onFinalize(() => {
-        setPressedNitro(false);
-      });
-  }, [disabled, nitroGestureRef, simultaneousHandlers]);
+  const { gesture: burnoutGesture, pressed: pressedBurnout } = controls.burnout;
+  const { gesture: nitroGesture, pressed: pressedNitro } = controls.nitro;
 
   return (
     <View style={[styles.container, compact && styles.compactContainer]}>

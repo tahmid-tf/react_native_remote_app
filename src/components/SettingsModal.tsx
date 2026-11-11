@@ -34,15 +34,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onReconnect,
 }) => {
   const [urlInput, setUrlInput] = useState<string>(serverUrl);
+  const [urlError, setUrlError] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsData | null>(null);
   const [diagLoading, setDiagLoading] = useState<boolean>(false);
   const [diagError, setDiagError] = useState<string | null>(null);
 
+  // Keep the input in sync with the saved URL (which is restored from storage
+  // after mount) and discard unsaved edits each time the dialog is reopened.
+  const [syncedUrl, setSyncedUrl] = useState<string>(serverUrl);
+  const [wasVisible, setWasVisible] = useState<boolean>(visible);
+  if (syncedUrl !== serverUrl || wasVisible !== visible) {
+    setSyncedUrl(serverUrl);
+    setWasVisible(visible);
+    if (visible || syncedUrl !== serverUrl) {
+      setUrlInput(serverUrl);
+      setUrlError(null);
+    }
+  }
+
   const handleSaveUrl = () => {
-    let clean = urlInput.trim();
-    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+    let clean = urlInput.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(clean)) {
       clean = `http://${clean}`;
     }
+    // Host (IPv4 or name) with optional port; the API path is added by the app.
+    if (!/^https?:\/\/[a-z0-9.-]+(:\d{1,5})?$/i.test(clean)) {
+      setUrlError('Enter an address like 192.168.4.1 or http://192.168.4.1:80');
+      return;
+    }
+    setUrlError(null);
+    setUrlInput(clean);
     onUpdateServerUrl(clean);
   };
 
@@ -123,6 +144,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Text style={styles.saveBtnText}>Save</Text>
                 </TouchableOpacity>
               </View>
+              {urlError && <Text style={styles.errorText}>{urlError}</Text>}
             </View>
 
             {/* Diagnostics Section */}

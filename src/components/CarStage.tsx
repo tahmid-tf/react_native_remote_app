@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, Animated } from 'react-native';
 import Svg, {
   Defs,
@@ -35,11 +35,11 @@ export const CarStage: React.FC<CarStageProps> = ({
   const isBurning = action?.name === 'burnout';
 
   // Animation values for smooth car tilting/translation
-  const angleAnim = useRef(new Animated.Value(0)).current;
-  const xAnim = useRef(new Animated.Value(0)).current;
-  const yAnim = useRef(new Animated.Value(0)).current;
-  const flameAnim = useRef(new Animated.Value(1)).current;
-  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  const angleAnim = useState(() => new Animated.Value(0))[0];
+  const xAnim = useState(() => new Animated.Value(0))[0];
+  const yAnim = useState(() => new Animated.Value(0))[0];
+  const flameAnim = useState(() => new Animated.Value(1))[0];
+  const pulseAnim = useState(() => new Animated.Value(0.4))[0];
 
   const targetTurn = action ? 0 : steering / 80;
   const targetTravel = action ? 1 : throttle / 80;

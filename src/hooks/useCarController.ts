@@ -78,7 +78,19 @@ export function calculateMotorOutputs(
   }) as [number, number, number, number];
 }
 
+type MotorTuple = [number, number, number, number];
+const ZERO_MOTORS: MotorTuple = [0, 0, 0, 0];
+
+function sameMotors(a: MotorTuple, b: MotorTuple): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
+}
+
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
 export function useCarController() {
+  const [hydrated, setHydrated] = useState<boolean>(false);
   const [isLiveMode, setIsLiveMode] = useState<boolean>(true);
   const [serverUrl, setServerUrl] = useState<string>('http://192.168.4.1');
   const [connected, setConnected] = useState<boolean>(false);
@@ -90,14 +102,18 @@ export function useCarController() {
   const [action, setAction] = useState<ActionState | null>(null);
   const [quick, setQuick] = useState<QuickState | null>(null);
   const [maintenance, setMaintenance] = useState<boolean>(false);
-  const [actualOutputs, setActualOutputs] = useState<[number, number, number, number]>([0, 0, 0, 0]);
-  const [announcement, setAnnouncement] = useState<string>('Connecting to Super Car (192.168.4.1)…');
+  const [actualOutputs, setActualOutputs] = useState<MotorTuple>(ZERO_MOTORS);
+  const [announcement, setAnnouncement] = useState<string>('Connecting to Super Car…');
 
   const actionCounterRef = useRef<number>(0);
   const animFrameRef = useRef<number | null>(null);
   const quickAnimFrameRef = useRef<number | null>(null);
   const linkRef = useRef<SuperCarLink | null>(null);
   const idleModeRef = useRef<'drive' | 'stop'>('stop');
+  // Mirrors of state that async callbacks (link status, timers) must read
+  // synchronously, without depending on stale render closures.
+  const connectedRef = useRef<boolean>(false);
+  const maintenanceRef = useRef<boolean>(false);
 
   // Real-time multi-touch refs to prevent closure clobbering during simultaneous gestures
   const throttleRef = useRef<number>(0);
@@ -106,35 +122,21 @@ export function useCarController() {
   const actionRef = useRef<ActionState | null>(null);
   const quickRef = useRef<QuickState | null>(null);
 
-  // Restore persisted settings from storage on startup
-  useEffect(() => {
-    let active = true;
-    AppStorage.getDriveMode().then((mode) => {
-      if (active && mode) {
-        setDriveMode(mode);
-      }
-    });
-    AppStorage.getServerUrl().then((savedUrl) => {
-      if (active && savedUrl) {
-        setServerUrl(savedUrl);
-      }
-    });
-    AppStorage.getIsLiveMode().then((savedLive) => {
-      if (active && typeof savedLive === 'boolean') {
-        setIsLiveMode(savedLive);
-      }
-    });
-    return () => {
-      active = false;
-    };
+  const updateConnected = useCallback((next: boolean) => {
+    connectedRef.current = next;
+    setConnected(next);
   }, []);
 
   const triggerHaptic = useCallback((style: 'light' | 'medium' | 'heavy' = 'light') => {
-    try {
-      if (style === 'heavy') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-      else if (style === 'medium') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      else Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {}
+    const impact =
+      style === 'heavy'
+        ? Haptics.ImpactFeedbackStyle.Heavy
+        : style === 'medium'
+          ? Haptics.ImpactFeedbackStyle.Medium
+          : Haptics.ImpactFeedbackStyle.Light;
+    // impactAsync returns a promise that rejects where haptics are unavailable (e.g. web);
+    // a sync try/catch would not catch that rejection.
+    Haptics.impactAsync(impact).catch(() => {});
   }, []);
 
   const announce = useCallback((msg: string) => {
@@ -160,16 +162,20 @@ export function useCarController() {
     [isLiveMode]
   );
 
+  const cancelAnimations = useCallback(() => {
+    if (animFrameRef.current !== null) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (quickAnimFrameRef.current !== null) {
+      cancelAnimationFrame(quickAnimFrameRef.current);
+      quickAnimFrameRef.current = null;
+    }
+  }, []);
+
   const stopAll = useCallback(
     (msg?: string, completed = false) => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
-      if (quickAnimFrameRef.current) {
-        cancelAnimationFrame(quickAnimFrameRef.current);
-        quickAnimFrameRef.current = null;
-      }
+      cancelAnimations();
 
       setQuick(null);
       quickRef.current = null;
@@ -195,66 +201,112 @@ export function useCarController() {
 
       if (msg) announce(msg);
     },
-    [announce, isLiveMode]
+    [announce, cancelAnimations, isLiveMode]
   );
 
-  // Switch Live / Demo Mode and manage transport
-  useEffect(() => {
-    if (isLiveMode) {
-      setConnected(false);
-      setProbing(true);
-      announce('Scanning for Super Car (192.168.4.1)…');
+  // Cancel any running action / quick-move animation loops on unmount
+  useEffect(() => cancelAnimations, [cancelAnimations]);
 
-      const link = new SuperCarLink((conn, motors, err, isProbing) => {
-        setActualOutputs(motors);
-        setProbing(!!isProbing);
-        setConnected((wasConn) => {
-          if (!conn) {
-            stopAll();
-            if (wasConn) {
-              triggerHaptic('heavy');
-              announce(
-                err === 'another controller is active'
-                  ? 'Another controller tab is active. Close it to take control.'
-                  : 'Connection lost · Auto-reconnecting…'
-              );
-            }
-          } else if (!wasConn) {
-            triggerHaptic('medium');
-            announce('Connected to Super Car. Controls ready.');
-          }
-          return conn;
-        });
-      }, serverUrl);
-
-      linkRef.current = link;
-      link.start();
-
-      return () => {
-        link.setActive(false);
-        link.stop();
-        linkRef.current = null;
-      };
-    } else {
-      if (linkRef.current) {
-        linkRef.current.setActive(false);
-        linkRef.current.stop();
-        linkRef.current = null;
+  /**
+   * Applies the Live / Demo operating mode and resets the connection state that
+   * goes with it. The transport link itself is managed by the effect below.
+   */
+  const applyLiveMode = useCallback(
+    (live: boolean, url: string) => {
+      stopAll();
+      setIsLiveMode(live);
+      if (live) {
+        updateConnected(false);
+        setProbing(true);
+        announce(`Scanning for Super Car (${url})…`);
+      } else {
+        updateConnected(true);
+        setProbing(false);
+        setActualOutputs(ZERO_MOTORS);
+        announce('Interactive demo mode active. Ready to drive.');
       }
-      setConnected(true);
-      setProbing(false);
-      setActualOutputs([0, 0, 0, 0]);
-      announce('Interactive demo mode active. Ready to drive.');
+    },
+    [stopAll, updateConnected, announce]
+  );
+
+  // Restore persisted settings on startup. The live link is not created until
+  // this finishes, so we never start probing a default URL that is about to change.
+  useEffect(() => {
+    let active = true;
+    Promise.all([AppStorage.getDriveMode(), AppStorage.getServerUrl(), AppStorage.getIsLiveMode()])
+      .then(([mode, savedUrl, savedLive]) => {
+        if (!active) return;
+        setDriveMode(mode);
+        setServerUrl(savedUrl);
+        applyLiveMode(savedLive, savedUrl);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setHydrated(true);
+      });
+    return () => {
+      active = false;
+    };
+    // Mount-only: restoring settings must not re-run when callbacks change identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Live transport lifecycle: one link per (live mode, server URL)
+  useEffect(() => {
+    if (!hydrated || !isLiveMode) return;
+
+    const link = new SuperCarLink((conn, motors, err, isProbing) => {
+      // Ignore late callbacks from a link that has been replaced or torn down
+      if (linkRef.current !== link) return;
+
+      setActualOutputs((prev) => (sameMotors(prev, motors) ? prev : motors));
+      setProbing(!!isProbing);
+
+      const wasConnected = connectedRef.current;
+      if (conn === wasConnected) return;
+      updateConnected(conn);
+
+      if (!conn) {
+        stopAll();
+        if (maintenanceRef.current) {
+          announce('Controls paused.');
+        } else {
+          triggerHaptic('heavy');
+          announce(
+            err === 'another controller is active'
+              ? 'Another controller is active. Close it to take control.'
+              : 'Connection lost · Auto-reconnecting…'
+          );
+        }
+      } else {
+        triggerHaptic('medium');
+        announce('Connected to Super Car. Controls ready.');
+      }
+    }, serverUrl);
+
+    linkRef.current = link;
+    if (maintenanceRef.current) {
+      link.setActive(false);
+    } else {
+      link.start();
     }
-  }, [isLiveMode, serverUrl, announce, stopAll, triggerHaptic]);
+
+    return () => {
+      // Detach first so the teardown status callback is ignored
+      linkRef.current = null;
+      link.setActive(false);
+      link.stop();
+    };
+  }, [hydrated, isLiveMode, serverUrl, announce, stopAll, triggerHaptic, updateConnected]);
 
   // App lifecycle listener (resumes auto-probing on foreground, neutralizes on background)
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
-        if (linkRef.current && isLiveMode) {
-          linkRef.current.wake();
-          if (!linkRef.current.isConnected()) {
+        const link = linkRef.current;
+        if (link && isLiveMode && !maintenanceRef.current) {
+          link.wake();
+          if (!link.isConnected()) {
             setProbing(true);
             announce('Resumed: Scanning for Super Car…');
           }
@@ -269,60 +321,58 @@ export function useCarController() {
     };
   }, [isLiveMode, stopAll, announce]);
 
-  // Handle Maintenance state changes
-  useEffect(() => {
-    if (maintenance) {
-      stopAll('Controls paused.');
-      if (linkRef.current) linkRef.current.setActive(false);
-    } else {
-      if (linkRef.current) linkRef.current.setActive(true);
-    }
-  }, [maintenance, stopAll]);
+  // Pause / resume controls (e.g. while a firmware update is in progress)
+  const updateMaintenance = useCallback(
+    (paused: boolean) => {
+      if (paused === maintenanceRef.current) return;
+      maintenanceRef.current = paused;
+      if (paused) stopAll('Controls paused.');
+      setMaintenance(paused);
+      linkRef.current?.setActive(!paused);
+    },
+    [stopAll]
+  );
 
   const toggleConnection = useCallback(() => {
     triggerHaptic('light');
     if (isLiveMode) {
       if (connected) {
         announce(`Connected to Super Car (${serverUrl}). Live telemetry active.`);
-      } else {
+      } else if (!maintenance) {
         setProbing(true);
         announce(`Searching for Super Car (${serverUrl})…`);
-        if (linkRef.current) {
-          linkRef.current.probeNow();
-        }
+        linkRef.current?.probeNow();
       }
     } else {
       stopAll();
-      setConnected((c) => {
-        const next = !c;
-        announce(next ? 'Demo link connected. Ready to drive.' : 'Demo link disconnected. All motor outputs stopped.');
-        return next;
-      });
+      const next = !connected;
+      updateConnected(next);
+      announce(
+        next ? 'Demo link connected. Ready to drive.' : 'Demo link disconnected. All motor outputs stopped.'
+      );
     }
-  }, [isLiveMode, connected, serverUrl, announce, stopAll, triggerHaptic]);
+  }, [isLiveMode, connected, maintenance, serverUrl, announce, stopAll, triggerHaptic, updateConnected]);
 
   const toggleDriveMode = useCallback(() => {
     if (!connected || maintenance) return;
     stopAll();
-    setDriveMode((prev) => {
-      const next = prev === 'mecanum' ? 'classic' : 'mecanum';
-      AppStorage.setDriveMode(next);
-      triggerHaptic('medium');
-      announce(
-        next === 'classic'
-          ? 'Classic mode. Right stick forward/back, left stick steers. Quick moves need mecanum mode.'
-          : 'Mecanum mode. Right stick moves in any direction, left stick rotates.'
-      );
-      return next;
-    });
-  }, [connected, maintenance, stopAll, announce, triggerHaptic]);
+    const next: DriveMode = driveMode === 'mecanum' ? 'classic' : 'mecanum';
+    setDriveMode(next);
+    AppStorage.setDriveMode(next);
+    triggerHaptic('medium');
+    announce(
+      next === 'classic'
+        ? 'Classic mode. Right stick forward/back, left stick steers. Quick moves need mecanum mode.'
+        : 'Mecanum mode. Right stick moves in any direction, left stick rotates.'
+    );
+  }, [connected, maintenance, driveMode, stopAll, announce, triggerHaptic]);
 
   // Movement Joystick (Throttle & Strafe)
   const setThrottleAndStrafe = useCallback(
     (forward: number, lateral = 0) => {
       if (!connected || maintenance || quickRef.current) return;
-      let f = forward;
-      let l = driveMode === 'classic' ? 0 : lateral;
+      const f = forward;
+      const l = driveMode === 'classic' ? 0 : lateral;
 
       let newT = 0;
       let newX = 0;
@@ -370,15 +420,24 @@ export function useCarController() {
   // Trigger Action (Burnout / Nitro)
   const startAction = useCallback(
     (name: ActionType): boolean => {
-      if (!connected || maintenance || (actionRef.current && name !== 'burnout')) return false;
+      if (!connected || maintenance || quickRef.current) return false;
+      // Burnout may re-trigger / interrupt; nitro cannot interrupt a running action
+      if (actionRef.current && name !== 'burnout') return false;
+
+      // Only one action loop may run at a time: an orphaned loop would later
+      // clear the new action early and could not be cancelled by stopAll().
+      if (animFrameRef.current !== null) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
 
       const duration = name === 'burnout' ? 100 : 1000;
       const nextId = ++actionCounterRef.current;
-      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const start = nowMs();
 
       const newAction: ActionState = {
         name,
-        start: now,
+        start,
         duration,
         id: nextId,
         progress: 1,
@@ -396,17 +455,20 @@ export function useCarController() {
       sendTransportUpdate(newAction, null, throttleRef.current, strafeRef.current, steeringRef.current);
 
       const tick = () => {
-        const currentNow = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        const elapsed = currentNow - now;
-        const remaining = Math.max(0, 1 - elapsed / duration);
+        if (actionRef.current?.id !== nextId) {
+          animFrameRef.current = null;
+          return;
+        }
+        const remaining = Math.max(0, 1 - (nowMs() - start) / duration);
 
         if (remaining <= 0) {
+          animFrameRef.current = null;
           actionRef.current = null;
           setAction(null);
           sendTransportUpdate(null, null, throttleRef.current, strafeRef.current, steeringRef.current);
           announce('Action complete. Ready to drive.');
         } else {
-          setAction((prev) => (prev ? { ...prev, progress: remaining } : null));
+          setAction((prev) => (prev && prev.id === nextId ? { ...prev, progress: remaining } : prev));
           animFrameRef.current = requestAnimationFrame(tick);
         }
       };
@@ -423,16 +485,19 @@ export function useCarController() {
       if (!connected || maintenance || actionRef.current || quickRef.current || driveMode !== 'mecanum') return false;
       stopAll();
 
-      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      const newQuick: QuickState = { name, start: now };
+      const start = nowMs();
+      const newQuick: QuickState = { name, start };
       quickRef.current = newQuick;
       setQuick(newQuick);
       triggerHaptic('light');
       announce(`${QUICK_NAMES[name] || name}: 80% PWM; hold to move, release to stop.`);
 
       const tick = () => {
-        const currentNow = typeof performance !== 'undefined' ? performance.now() : Date.now();
-        const phase = (currentNow - now) / 1000;
+        if (quickRef.current !== newQuick) {
+          quickAnimFrameRef.current = null;
+          return;
+        }
+        const phase = (nowMs() - start) / 1000;
         let t = 0;
         let x = 0;
         let s = 0;
@@ -486,6 +551,8 @@ export function useCarController() {
   );
 
   const stopQuick = useCallback(() => {
+    // Already stopped (e.g. emergency stop or link loss) — keep that announcement
+    if (!quickRef.current) return;
     quickRef.current = null;
     stopAll('Quick move released. Controls neutral.');
   }, [stopAll]);
@@ -523,15 +590,29 @@ export function useCarController() {
     else driveStateText = 'DRIVING';
   }
 
-  const updateServerUrl = useCallback((url: string) => {
-    setServerUrl(url);
-    AppStorage.setServerUrl(url);
-  }, []);
+  const updateServerUrl = useCallback(
+    (url: string) => {
+      if (url === serverUrl) return;
+      setServerUrl(url);
+      AppStorage.setServerUrl(url);
+      if (isLiveMode) {
+        stopAll();
+        updateConnected(false);
+        setProbing(true);
+        announce(`Scanning for Super Car (${url})…`);
+      }
+    },
+    [serverUrl, isLiveMode, stopAll, updateConnected, announce]
+  );
 
-  const updateIsLiveMode = useCallback((live: boolean) => {
-    setIsLiveMode(live);
-    AppStorage.setIsLiveMode(live);
-  }, []);
+  const updateIsLiveMode = useCallback(
+    (live: boolean) => {
+      if (live === isLiveMode) return;
+      applyLiveMode(live, serverUrl);
+      AppStorage.setIsLiveMode(live);
+    },
+    [isLiveMode, serverUrl, applyLiveMode]
+  );
 
   return {
     connected,
@@ -551,7 +632,7 @@ export function useCarController() {
     action,
     quick,
     maintenance,
-    setMaintenance,
+    setMaintenance: updateMaintenance,
     announcement,
     setThrottleAndStrafe,
     setSteeringInput,

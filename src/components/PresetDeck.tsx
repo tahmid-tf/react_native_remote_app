@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,12 +6,12 @@ import {
   Platform,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { QuickState } from '@/hooks/useCarController';
 
 interface PresetDeckProps {
   currentQuick: QuickState | null;
-  onStart: (name: string) => void;
+  onStart: (name: string) => boolean;
   onStop: () => void;
   disabled?: boolean;
   driveMode: 'mecanum' | 'classic';
@@ -104,31 +104,32 @@ const PresetButtonCell: React.FC<{
   item: PresetItem;
   isFiring: boolean;
   isBlocked: boolean;
-  onStart: (name: string) => void;
+  onStart: (name: string) => boolean;
   onStop: () => void;
 }> = ({ item, isFiring, isBlocked, onStart, onStop }) => {
-  const onStartRef = useRef(onStart);
-  onStartRef.current = onStart;
-  const onStopRef = useRef(onStop);
-  onStopRef.current = onStop;
+  // Whether the current press is the one that started the maneuver.
+  const startedRef = useRef(false);
 
   const iconColor = isFiring ? '#00f0ff' : isBlocked ? '#4b5563' : '#38bdf8';
 
-  const gesture = useMemo(() => {
-    return Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true)
-      .enabled(!isBlocked)
-      .onBegin(() => {
-        onStartRef.current(item.id);
-      })
-      .onFinalize(() => {
-        onStopRef.current();
-      });
-  }, [isBlocked, item.id]);
+  const gesture = usePanGesture({
+    minDistance: 0,
+    minPointers: 1,
+    maxPointers: 1,
+    shouldCancelWhenOutside: false,
+    runOnJS: true,
+    enabled: !isBlocked,
+    onBegin: () => {
+      startedRef.current = onStart(item.id);
+    },
+    onFinalize: () => {
+      // Only the press that actually started the maneuver may stop it; otherwise
+      // a second finger on another preset would cancel the one being held.
+      if (!startedRef.current) return;
+      startedRef.current = false;
+      onStop();
+    },
+  });
 
   return (
     <GestureDetector gesture={gesture}>

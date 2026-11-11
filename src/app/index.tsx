@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,12 +10,17 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { useCarController } from '@/hooks/useCarController';
 import { TopBar } from '@/components/TopBar';
 import { CarStage } from '@/components/CarStage';
-import { RotationJoystick, MovementJoystick } from '@/components/Joystick';
-import { ActionDeck } from '@/components/ActionDeck';
+import {
+  RotationJoystick,
+  MovementJoystick,
+  useRotationJoystick,
+  useMovementJoystick,
+} from '@/components/Joystick';
+import { ActionDeck, useActionDeck } from '@/components/ActionDeck';
 import { PresetDeck } from '@/components/PresetDeck';
 import { FirmwareModal } from '@/components/FirmwareModal';
 import { SettingsModal } from '@/components/SettingsModal';
@@ -56,34 +61,6 @@ export default function RemoteScreen() {
   const [firmwareModalOpen, setFirmwareModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
 
-  // Gesture references for simultaneous multi-touch orchestration
-  const steerGestureRef = useRef<any>(null);
-  const moveGestureRef = useRef<any>(null);
-  const burnoutGestureRef = useRef<any>(null);
-  const nitroGestureRef = useRef<any>(null);
-  const stopGestureRef = useRef<any>(null);
-
-  const stopGesture = useMemo(() => {
-    let g = Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true)
-      .withRef(stopGestureRef);
-
-    g = g.simultaneousWithExternalGesture(
-      steerGestureRef,
-      moveGestureRef,
-      burnoutGestureRef,
-      nitroGestureRef
-    );
-
-    return g.onBegin(() => {
-      stopAll('Emergency stop activated.');
-    });
-  }, [stopAll]);
-
   // Compute responsive layout dimensions for any Android screen (320dp to 480dp+ height)
   const safeTop = Math.max(insets.top, 2);
   const safeBottom = Math.max(insets.bottom, 2);
@@ -100,6 +77,46 @@ export default function RemoteScreen() {
   );
 
   const isClassic = driveMode === 'classic';
+  const drivingDisabled = !connected || maintenance || !!quick;
+
+  // Multi-touch: both joysticks, the action buttons and STOP must track separate
+  // fingers at the same time. Relations take gesture objects, so all five pan
+  // gestures are created here in a fixed order and each one lists only the
+  // gestures created before it; RNGH makes `simultaneousWith` symmetric, which
+  // yields the full graph (burnout and nitro stay exclusive of each other).
+  const steerJoystick = useRotationJoystick({
+    size: joystickSize,
+    disabled: drivingDisabled,
+    onChange: setSteeringInput,
+  });
+  const moveJoystick = useMovementJoystick({
+    size: joystickSize,
+    disabled: drivingDisabled,
+    driveMode,
+    onChange: setThrottleAndStrafe,
+    simultaneousWith: [steerJoystick.gesture],
+  });
+  const actionControls = useActionDeck({
+    onTrigger: startAction,
+    disabled: drivingDisabled,
+    simultaneousWith: [steerJoystick.gesture, moveJoystick.gesture],
+  });
+  const stopGesture = usePanGesture({
+    minDistance: 0,
+    minPointers: 1,
+    maxPointers: 1,
+    shouldCancelWhenOutside: false,
+    runOnJS: true,
+    simultaneousWith: [
+      steerJoystick.gesture,
+      moveJoystick.gesture,
+      actionControls.burnout.gesture,
+      actionControls.nitro.gesture,
+    ],
+    onBegin: () => {
+      stopAll('Emergency stop activated.');
+    },
+  });
 
   return (
     <View style={styles.safeArea}>
@@ -136,23 +153,18 @@ export default function RemoteScreen() {
           <View style={styles.landscapeLeftWing}>
             <RotationJoystick
               value={steering}
-              onChange={setSteeringInput}
-              disabled={!connected || maintenance || !!quick}
+              control={steerJoystick}
+              disabled={drivingDisabled}
               driveMode={driveMode}
               size={joystickSize}
               compact={true}
-              gestureRef={steerGestureRef}
-              simultaneousHandlers={[moveGestureRef, burnoutGestureRef, nitroGestureRef, stopGestureRef]}
             />
             <View style={styles.landscapeActionBox}>
               <ActionDeck
                 action={action}
-                onTrigger={startAction}
-                disabled={!connected || maintenance}
+                controls={actionControls}
+                disabled={drivingDisabled}
                 compact={true}
-                burnoutGestureRef={burnoutGestureRef}
-                nitroGestureRef={nitroGestureRef}
-                simultaneousHandlers={[steerGestureRef, moveGestureRef, stopGestureRef]}
               />
             </View>
           </View>
@@ -230,13 +242,11 @@ export default function RemoteScreen() {
             <MovementJoystick
               throttle={throttle}
               strafe={strafe}
-              onChange={setThrottleAndStrafe}
-              disabled={!connected || maintenance || !!quick}
+              control={moveJoystick}
+              disabled={drivingDisabled}
               driveMode={driveMode}
               size={joystickSize}
               compact={true}
-              gestureRef={moveGestureRef}
-              simultaneousHandlers={[steerGestureRef, burnoutGestureRef, nitroGestureRef, stopGestureRef]}
             />
             <View style={styles.landscapeRightFooter}>
               <GestureDetector gesture={stopGesture}>

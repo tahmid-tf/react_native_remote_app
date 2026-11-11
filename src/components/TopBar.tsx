@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -21,7 +21,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenSettings,
   compact = true,
 }) => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useState(() => new Animated.Value(1))[0];
 
   // Active radar breathing animation while probing/searching for ESP32 connection
   useEffect(() => {

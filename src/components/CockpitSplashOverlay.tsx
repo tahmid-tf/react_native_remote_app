@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,9 +14,9 @@ interface CockpitSplashOverlayProps {
 
 export const CockpitSplashOverlay: React.FC<CockpitSplashOverlayProps> = ({ onFinish }) => {
   const [visible, setVisible] = useState(true);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
-  const scaleAnim = useRef(new Animated.Value(0.96)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useState(() => new Animated.Value(1))[0];
+  const scaleAnim = useState(() => new Animated.Value(0.96))[0];
+  const progressAnim = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
     // Animate progress line and scale

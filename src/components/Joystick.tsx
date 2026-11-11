@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,88 +6,110 @@ import {
   Animated,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector, usePanGesture, type PanGesture } from 'react-native-gesture-handler';
+
+const SPRING_HOME = {
+  toValue: 0,
+  friction: 7,
+  tension: 100,
+  useNativeDriver: true,
+} as const;
+
+// A touch landing within this fraction of the knob diameter from the centre
+// grabs the knob where it is (no jump); anywhere else jumps the knob to the thumb.
+const ANCHOR_RADIUS = 0.38;
+
+interface JoystickGestureOptions {
+  size: number;
+  disabled: boolean;
+  /**
+   * Gestures created earlier (in render order) that may run at the same time
+   * as this one. RNGH makes the relation symmetric, so later gestures only
+   * need to list earlier ones.
+   */
+  simultaneousWith?: PanGesture[];
+}
 
 // ==========================================
 // Rotation / Steering Joystick (Left - 1D)
 // ==========================================
 
+export interface RotationJoystickControl {
+  gesture: PanGesture;
+  knobX: Animated.Value;
+  engaged: boolean;
+}
+
+export function useRotationJoystick({
+  size,
+  disabled,
+  onChange,
+  simultaneousWith,
+}: JoystickGestureOptions & { onChange: (yaw: number) => void }): RotationJoystickControl {
+  const travel = size * 0.28;
+  const knobSize = size * 0.42;
+  const [knobX] = useState(() => new Animated.Value(0));
+  const [engaged, setEngaged] = useState(false);
+  const startOffset = useRef(0);
+
+  const gesture = usePanGesture({
+    // Activate on touch-down, one finger per stick, keep tracking when the thumb
+    // slides off the well. Written out (no spread): the Worklets Babel plugin
+    // rejects spread elements in gesture-hook configs.
+    minDistance: 0,
+    minPointers: 1,
+    maxPointers: 1,
+    shouldCancelWhenOutside: false,
+    // JS thread: callbacks drive Animated.Values and the car controller.
+    runOnJS: true,
+    enabled: !disabled,
+    simultaneousWith,
+    onBegin: (e) => {
+      setEngaged(true);
+      // e.x is relative to the well itself (exact center is size / 2)
+      const rawDx = e.x - size / 2;
+      // If thumb lands on/near the knob, anchor at center for smooth drag without jumping
+      const startX = Math.abs(rawDx) < knobSize * ANCHOR_RADIUS ? 0 : rawDx;
+      startOffset.current = startX;
+      const clampedDx = Math.max(-travel, Math.min(travel, startX));
+      knobX.setValue(clampedDx);
+      onChange(clampedDx / travel);
+    },
+    onUpdate: (e) => {
+      const curX = startOffset.current + e.translationX;
+      const clampedDx = Math.max(-travel, Math.min(travel, curX));
+      knobX.setValue(clampedDx);
+      onChange(clampedDx / travel);
+    },
+    onFinalize: () => {
+      setEngaged(false);
+      Animated.spring(knobX, SPRING_HOME).start();
+      onChange(0);
+    },
+  });
+
+  return { gesture, knobX, engaged };
+}
+
 interface RotationJoystickProps {
   value: number; // -80 to 80
-  onChange: (yaw: number) => void;
+  control: RotationJoystickControl;
   disabled?: boolean;
   driveMode: 'mecanum' | 'classic';
   size?: number;
   compact?: boolean;
-  gestureRef?: React.MutableRefObject<any>;
-  simultaneousHandlers?: React.MutableRefObject<any>[];
 }
 
 export const RotationJoystick: React.FC<RotationJoystickProps> = ({
   value,
-  onChange,
+  control,
   disabled = false,
   driveMode,
   size = 160,
   compact = false,
-  gestureRef,
-  simultaneousHandlers,
 }) => {
-  const travel = size * 0.28;
-  const knobAnimX = useRef(new Animated.Value(0)).current;
-  const [engaged, setEngaged] = useState(false);
-  const startOffset = useRef<number>(0);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
+  const { gesture: panGesture, knobX: knobAnimX, engaged } = control;
   const knobSize = size * 0.42;
-
-  const panGesture = useMemo(() => {
-    let g = Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true);
-
-    if (gestureRef) {
-      g = g.withRef(gestureRef);
-    }
-
-    if (simultaneousHandlers && simultaneousHandlers.length > 0) {
-      g = g.simultaneousWithExternalGesture(...simultaneousHandlers);
-    }
-
-    return g
-      .enabled(!disabled)
-      .onBegin((e) => {
-        setEngaged(true);
-        // e.x is relative to the well itself (exact center is size / 2)
-        const rawDx = e.x - size / 2;
-        // If thumb lands on/near the knob, anchor at center for smooth drag without jumping
-        const startX = Math.abs(rawDx) < knobSize * 0.38 ? 0 : rawDx;
-        startOffset.current = startX;
-        const clampedDx = Math.max(-travel, Math.min(travel, startX));
-        knobAnimX.setValue(clampedDx);
-        onChangeRef.current(clampedDx / travel);
-      })
-      .onUpdate((e) => {
-        const curX = startOffset.current + e.translationX;
-        const clampedDx = Math.max(-travel, Math.min(travel, curX));
-        knobAnimX.setValue(clampedDx);
-        onChangeRef.current(clampedDx / travel);
-      })
-      .onFinalize(() => {
-        setEngaged(false);
-        Animated.spring(knobAnimX, {
-          toValue: 0,
-          friction: 7,
-          tension: 100,
-          useNativeDriver: true,
-        }).start();
-        onChangeRef.current(0);
-      });
-  }, [travel, size, knobSize, disabled, gestureRef, simultaneousHandlers]);
 
   const isClassic = driveMode === 'classic';
   const displayVal = Math.abs(value);
@@ -187,118 +209,117 @@ export const RotationJoystick: React.FC<RotationJoystickProps> = ({
 // Movement / Throttle Joystick (Right - 2D)
 // ==========================================
 
+export interface MovementJoystickControl {
+  gesture: PanGesture;
+  knobX: Animated.Value;
+  knobY: Animated.Value;
+  engaged: boolean;
+}
+
+export function useMovementJoystick({
+  size,
+  disabled,
+  driveMode,
+  onChange,
+  simultaneousWith,
+}: JoystickGestureOptions & {
+  driveMode: 'mecanum' | 'classic';
+  onChange: (forward: number, lateral: number) => void;
+}): MovementJoystickControl {
+  const travel = size * 0.28;
+  const knobSize = size * 0.42;
+  const isClassic = driveMode === 'classic';
+  const [knobX] = useState(() => new Animated.Value(0));
+  const [knobY] = useState(() => new Animated.Value(0));
+  const [engaged, setEngaged] = useState(false);
+  const startOffset = useRef({ x: 0, y: 0 });
+
+  const computeAndDispatch = (curX: number, curY: number) => {
+    const rawDx = isClassic ? 0 : curX;
+    const rawDy = curY; // upward is positive forward
+
+    const dist = Math.hypot(rawDx, rawDy);
+    const clampedDist = Math.min(travel, dist);
+    const scale = dist > 0 ? clampedDist / dist : 0;
+
+    const clampedX = rawDx * scale;
+    const clampedY = rawDy * scale;
+
+    knobX.setValue(clampedX);
+    knobY.setValue(-clampedY);
+
+    const normX = clampedX / travel;
+    const normY = clampedY / travel;
+    onChange(normY, normX);
+  };
+
+  const gesture = usePanGesture({
+    // Activate on touch-down, one finger per stick, keep tracking when the thumb
+    // slides off the well. Written out (no spread): the Worklets Babel plugin
+    // rejects spread elements in gesture-hook configs.
+    minDistance: 0,
+    minPointers: 1,
+    maxPointers: 1,
+    shouldCancelWhenOutside: false,
+    // JS thread: callbacks drive Animated.Values and the car controller.
+    runOnJS: true,
+    enabled: !disabled,
+    simultaneousWith,
+    onBegin: (e) => {
+      setEngaged(true);
+      // e.x, e.y are relative to the well itself (exact center is size / 2, size / 2)
+      const rawDx = isClassic ? 0 : e.x - size / 2;
+      const rawDy = size / 2 - e.y;
+      const distFromCenter = Math.hypot(rawDx, rawDy);
+
+      // If thumb lands on/near the knob, anchor at center for smooth drag without jumping
+      const anchored = distFromCenter < knobSize * ANCHOR_RADIUS;
+      const startX = anchored ? 0 : rawDx;
+      const startY = anchored ? 0 : rawDy;
+
+      startOffset.current = { x: startX, y: startY };
+      computeAndDispatch(startX, startY);
+    },
+    onUpdate: (e) => {
+      const curX = startOffset.current.x + e.translationX;
+      const curY = startOffset.current.y - e.translationY;
+      computeAndDispatch(curX, curY);
+    },
+    onFinalize: () => {
+      setEngaged(false);
+      Animated.parallel([
+        Animated.spring(knobX, SPRING_HOME),
+        Animated.spring(knobY, SPRING_HOME),
+      ]).start();
+      onChange(0, 0);
+    },
+  });
+
+  return { gesture, knobX, knobY, engaged };
+}
+
 interface MovementJoystickProps {
   throttle: number; // -80 to 80
   strafe: number; // -80 to 80
-  onChange: (forward: number, lateral: number) => void;
+  control: MovementJoystickControl;
   disabled?: boolean;
   driveMode: 'mecanum' | 'classic';
   size?: number;
   compact?: boolean;
-  gestureRef?: React.MutableRefObject<any>;
-  simultaneousHandlers?: React.MutableRefObject<any>[];
 }
 
 export const MovementJoystick: React.FC<MovementJoystickProps> = ({
   throttle,
   strafe,
-  onChange,
+  control,
   disabled = false,
   driveMode,
   size = 160,
   compact = false,
-  gestureRef,
-  simultaneousHandlers,
 }) => {
-  const travel = size * 0.28;
-  const knobAnimX = useRef(new Animated.Value(0)).current;
-  const knobAnimY = useRef(new Animated.Value(0)).current;
-  const [engaged, setEngaged] = useState(false);
+  const { gesture: panGesture, knobX: knobAnimX, knobY: knobAnimY, engaged } = control;
   const isClassic = driveMode === 'classic';
-
-  const startOffsetX = useRef<number>(0);
-  const startOffsetY = useRef<number>(0);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
   const knobSize = size * 0.42;
-
-  const panGesture = useMemo(() => {
-    let g = Gesture.Pan()
-      .minDistance(0)
-      .minPointers(1)
-      .maxPointers(1)
-      .shouldCancelWhenOutside(false)
-      .runOnJS(true);
-
-    if (gestureRef) {
-      g = g.withRef(gestureRef);
-    }
-
-    if (simultaneousHandlers && simultaneousHandlers.length > 0) {
-      g = g.simultaneousWithExternalGesture(...simultaneousHandlers);
-    }
-
-    const computeAndDispatch = (curX: number, curY: number) => {
-      const rawDx = isClassic ? 0 : curX;
-      const rawDy = curY; // upward is positive forward
-
-      const dist = Math.hypot(rawDx, rawDy);
-      const clampedDist = Math.min(travel, dist);
-      const scale = dist > 0 ? clampedDist / dist : 0;
-
-      const clampedX = rawDx * scale;
-      const clampedY = rawDy * scale;
-
-      knobAnimX.setValue(clampedX);
-      knobAnimY.setValue(-clampedY);
-
-      const normX = clampedX / travel;
-      const normY = clampedY / travel;
-      onChangeRef.current(normY, normX);
-    };
-
-    return g
-      .enabled(!disabled)
-      .onBegin((e) => {
-        setEngaged(true);
-        // e.x, e.y are relative to the well itself (exact center is size / 2, size / 2)
-        const rawDx = isClassic ? 0 : e.x - size / 2;
-        const rawDy = size / 2 - e.y;
-        const distFromCenter = Math.hypot(rawDx, rawDy);
-
-        // If thumb lands on/near the knob, anchor at center for smooth drag without jumping
-        const startX = distFromCenter < knobSize * 0.38 ? 0 : rawDx;
-        const startY = distFromCenter < knobSize * 0.38 ? 0 : rawDy;
-
-        startOffsetX.current = startX;
-        startOffsetY.current = startY;
-        computeAndDispatch(startX, startY);
-      })
-      .onUpdate((e) => {
-        const curX = startOffsetX.current + e.translationX;
-        const curY = startOffsetY.current - e.translationY;
-        computeAndDispatch(curX, curY);
-      })
-      .onFinalize(() => {
-        setEngaged(false);
-        Animated.parallel([
-          Animated.spring(knobAnimX, {
-            toValue: 0,
-            friction: 7,
-            tension: 100,
-            useNativeDriver: true,
-          }),
-          Animated.spring(knobAnimY, {
-            toValue: 0,
-            friction: 7,
-            tension: 100,
-            useNativeDriver: true,
-          }),
-        ]).start();
-        onChangeRef.current(0, 0);
-      });
-  }, [travel, size, knobSize, isClassic, disabled, gestureRef, simultaneousHandlers]);
 
   const componentMag = Math.round(Math.hypot(throttle, strafe));
   const displayVal = Math.min(80, componentMag);
